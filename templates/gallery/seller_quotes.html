@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="mb-4">Incoming quote requests</h2>
+    {% if quotes %}
+        <div class="d-grid gap-3">
+            {% for quote in quotes %}
+                <article class="card dashboard-card p-4">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <h5 class="mb-1">{{ quote.product.name }}</h5>
+                            <p class="text-muted mb-2">From {{ quote.buyer.business_name|default:quote.buyer.username }} · Quantity: {{ quote.quantity }}</p>
+                            {% if quote.message %}<p>{{ quote.message }}</p>{% endif %}
+                        </div>
+                        <span class="badge text-bg-secondary">{{ quote.get_status_display }}</span>
+                    </div>
+                    <form method="post" action="{% url 'respond_to_quote' quote.pk %}" class="row g-2 align-items-end">
+                        {% csrf_token %}
+                        <div class="col-md-3">
+                            <label for="status-{{ quote.pk }}" class="form-label">Status</label>
+                            <select id="status-{{ quote.pk }}" name="status" class="form-select">
+                                <option value="QUOTED" {% if quote.status == 'QUOTED' %}selected{% endif %}>Quoted</option>
+                                <option value="DECLINED" {% if quote.status == 'DECLINED' %}selected{% endif %}>Declined</option>
+                            </select>
+                        </div>
+                        <div class="col-md">
+                            <label for="response-{{ quote.pk }}" class="form-label">Response to buyer</label>
+                            <textarea id="response-{{ quote.pk }}" name="seller_response" class="form-control" rows="2" maxlength="1000" placeholder="Price, availability, or a message">{{ quote.seller_response }}</textarea>
+                        </div>
+                        <div class="col-md-auto">
+                            <button type="submit" class="btn btn-gab">Send response</button>
+                        </div>
+                    </form>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5 bg-white rounded-4">
+            <h4>No quote requests yet</h4>
+            <p class="text-muted">Buyer requests for your products will appear here.</p>
+            <a href="{% url 'my_products' %}" class="btn btn-outline-primary">Manage products</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "GAB - Grow All kind of Business",
+  "short_name": "GAB",
+  "description": "Connect businesses, discover products, and request quotes on GAB.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0a2540",
+  "icons": [
+    {
+      "src": "/static/icons/gab-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/gab-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

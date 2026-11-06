@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .catalog-shell {
+        padding: 48px 0 60px;
+    }
+    .catalog-hero {
+        background: linear-gradient(135deg, #0b1f38 0%, #123b6e 100%);
+        border-radius: 28px;
+        padding: 44px 36px;
+        color: white;
+        margin-bottom: 28px;
+    }
+    .catalog-kicker {
+        letter-spacing: 0.14em;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        opacity: 0.8;
+    }
+    .catalog-hero h1 {
+        font-size: clamp(2.2rem, 5vw, 3.4rem);
+        font-weight: 800;
+        margin: 10px 0 14px;
+    }
+    .catalog-hero p {
+        max-width: 640px;
+        color: rgba(255,255,255,0.8);
+        margin-bottom: 0;
+    }
+    .catalog-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 24px;
+    }
+    .catalog-stat {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 14px;
+        min-width: 130px;
+        padding: 14px 16px;
+    }
+    .catalog-stat strong {
+        display: block;
+        font-size: 1.15rem;
+        margin-bottom: 3px;
+    }
+    .catalog-layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 24px;
+    }
+    .catalog-sidebar,
+    .catalog-main {
+        min-width: 0;
+    }
+    .panel-box {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 22px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+    }
+    .filter-group + .filter-group {
+        margin-top: 24px;
+    }
+    .filter-group h5 {
+        font-size: 0.85rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 14px;
+    }
+    .category-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .category-link {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-decoration: none;
+        color: #1e293b;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        transition: 0.2s ease;
+    }
+    .category-link:hover,
+    .category-link.active {
+        text-decoration: none;
+        background: #edf6ff;
+        border-color: #bfdcff;
+        color: #0d6efd;
+    }
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+    .search-input {
+        width: min(100%, 420px);
+    }
+    .search-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+    .search-form input,
+    .search-form select {
+        height: 48px;
+        border-radius: 12px;
+        border: 1px solid #dfe7f0;
+        padding: 0 14px;
+        background: #fff;
+    }
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 22px;
+    }
+    .product-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        height: 100%;
+    }
+    .product-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        text-decoration: none;
+    }
+    .product-media {
+        position: relative;
+        height: 200px;
+        padding: 18px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        background: linear-gradient(135deg, rgba(13,110,253,0.9), rgba(13,205,255,0.7));
+    }
+    .product-photo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .product-media::before {
+        content: "";
+        position: absolute;
+        inset: 15px 14px auto auto;
+        width: 130px;
+        height: 130px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.18);
+    }
+    .product-media::after {
+        content: "";
+        position: absolute;
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
+        right: 34px;
+        top: 18px;
+        background: rgba(255,255,255,0.12);
+    }
+    .product-label {
+        position: relative;
+        z-index: 1;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.18);
+        color: white;
+        backdrop-filter: blur(6px);
+    }
+    .product-badge {
+        position: relative;
+        z-index: 1;
+        background: rgba(12, 53, 96, 0.24);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    .product-body {
+        padding: 18px 18px 20px;
+    }
+    .product-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .product-name {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #10233d;
+    }
+    .star-row {
+        color: #f59e0b;
+        font-size: 0.8rem;
+        margin: 6px 0 10px;
+    }
+    .product-meta {
+        color: #64748b;
+        font-size: 0.82rem;
+        margin-bottom: 12px;
+    }
+    .price-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .price-row strong {
+        font-size: 1.45rem;
+        color: #0b1f38;
+    }
+    .price-row span {
+        color: #94a3b8;
+        text-decoration: line-through;
+    }
+    .product-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #eef7ff;
+        color: #0d6efd;
+        border-radius: 999px;
+        padding: 6px 9px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-top: 8px;
+    }
+    @media (max-width: 991px) {
+        .catalog-layout {
+            grid-template-columns: 1fr;
+        }
+        .catalog-sidebar {
+            order: 2;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container catalog-shell">
+    {% include 'gallery/_seller_banners.html' %}
+    <section class="catalog-hero">
+        <div class="catalog-kicker">B2B marketplace</div>
+        <h1>Find verified products for every business need.</h1>
+        <p>Source factory-ready inventory, trusted supplies, and high-volume deals from reliable sellers across India.</p>
+        <div class="catalog-stats">
+            <div class="catalog-stat">
+                <strong>{{ total_products }}</strong>
+                <span>Products in results</span>
+            </div>
+            <div class="catalog-stat">
+                <strong>{{ categories|length }}</strong>
+                <span>Product categories</span>
+            </div>
+            <div class="catalog-stat">
+                <strong>Direct</strong>
+                <span>Seller enquiries</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="catalog-layout">
+        <aside class="catalog-sidebar">
+            <div class="panel-box">
+                <div class="filter-group">
+                    <h5>Categories</h5>
+                    <div class="category-list">
+                        <a href="{% url 'catalog' %}?category=all" class="category-link {% if selected_category == 'all' %}active{% endif %}">
+                            <span>All</span>
+                            <small>{{ total_products }}</small>
+                        </a>
+                        {% for option in category_options %}
+                        <a href="{% url 'catalog' %}?category={{ option.value }}" class="category-link {% if selected_category == option.value %}active{% endif %}">
+                            <span>{{ option.value }}</span>
+                            <small>{{ option.count }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <h5>Why sellers choose GAB</h5>
+                    <ul class="list-unstyled mb-0 small text-muted">
+                        <li class="mb-2">• Trusted supplier verification</li>
+                        <li class="mb-2">• Fast bulk order support</li>
+                        <li class="mb-2">• Transparent pricing</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <div class="catalog-main">
+            <div class="toolbar">
+                <div>
+                    <h3 class="mb-1">Marketplace catalog</h3>
+                    <p class="text-muted mb-0">{{ total_products }} products available</p>
+                </div>
+
+                <form method="get" class="search-form">
+                    <input type="search" name="q" value="{{ query }}" class="search-input" placeholder="Search products, suppliers, city...">
+                    <select name="sort">
+                        <option value="featured" {% if sort == 'featured' %}selected{% endif %}>Featured</option>
+                        <option value="rating" {% if sort == 'rating' %}selected{% endif %}>Top rated</option>
+                        <option value="price_low" {% if sort == 'price_low' %}selected{% endif %}>Price: Low to high</option>
+                        <option value="price_high" {% if sort == 'price_high' %}selected{% endif %}>Price: High to low</option>
+                    </select>
+                    {% if selected_category != 'all' %}
+                    <input type="hidden" name="category" value="{{ selected_category }}">
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                </form>
+            </div>
+
+            <div class="product-grid">
+                {% for product in products %}
+                <a href="{% url 'product_detail' product.slug %}" class="product-card text-decoration-none">
+                    <div class="product-media" style="background: linear-gradient(135deg, {{ product.accent }}, rgba(15,23,42,0.7));">
+                        {% if product.image %}
+                            <img class="product-photo" src="{{ product.image.url }}" alt="{{ product.name }}">
+                        {% endif %}
+                        <span class="product-label">{{ product.category }}</span>
+                        <span class="product-badge">{{ product.stock_status }}</span>
+                    </div>
+                    <div class="product-body">
+                        <div class="product-head">
+                            <h4 class="product-name">{{ product.name }}</h4>
+                        </div>
+
+                        {% if product.review_count %}
+                            <div class="star-row">★★★★★ <span class="text-muted">({{ product.review_count }})</span></div>
+                        {% else %}
+                            <div class="product-meta">No reviews yet</div>
+                        {% endif %}
+                        <div class="product-meta">{{ product.supplier }} · {{ product.location }}</div>
+                        {% if product.owner %}<div class="small text-success mb-2">Listed by {{ product.owner.business_name|default:product.owner.username }}</div>{% endif %}
+
+                        <div class="price-row">
+                            <strong>₹{{ product.price }}</strong>
+                            {% if product.old_price %}
+                            <span>₹{{ product.old_price }}</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="text-muted small mb-2">{{ product.description|truncatechars:90 }}</div>
+                        {% if product.discount_percent %}
+                        <span class="product-tag">Save {{ product.discount_percent }}%</span>
+                        {% else %}
+                        <span class="product-tag">{{ product.stock_status }}</span>
+                        {% endif %}
+                    </div>
+                </a>
+                {% empty %}
+                <div class="col-12">
+                    <div class="panel-box text-center py-5">
+                        <h4 class="mb-2">No products match this search.</h4>
+                        <p class="text-muted mb-0">Try a different category, keyword, or supplier filter.</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

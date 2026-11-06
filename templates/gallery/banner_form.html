@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="card auth-card">
+        <div class="auth-header">
+            <h2 class="mb-1">{% if banner %}Edit your advertisement{% else %}Promote your business{% endif %}</h2>
+            <p class="mb-0 opacity-75">Your banner will appear in the GAB marketplace</p>
+        </div>
+        <div class="card-body p-4 p-lg-5">
+            {% if banner.image %}
+                <img src="{{ banner.image.url }}" alt="{{ banner.title }}" class="img-fluid rounded mb-4" style="max-height: 220px;">
+            {% endif %}
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                {% endfor %}
+                <p class="small text-muted">Use a clear image and a secure http:// or https:// destination link.</p>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-gab">{% if banner %}Save changes{% else %}Publish banner{% endif %}</button>
+                    <a href="{% url 'my_banners' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

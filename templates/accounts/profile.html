@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row g-4 justify-content-center">
+        <div class="col-lg-8">
+            <div class="card dashboard-card border-0 shadow-sm">
+                <div class="card-header bg-dark text-white border-0 py-3">
+                    <h3 class="mb-0">My profile</h3>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Full name</p>
+                            <h5>{{ user_obj.get_full_name|default:user_obj.username }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Username</p>
+                            <h5>{{ user_obj.username }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Email</p>
+                            <h5>{{ user_obj.email|default:'Not provided' }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Role</p>
+                            <h5>{{ user_obj.get_role_display }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Business</p>
+                            <h5>{{ user_obj.business_name|default:'Not provided' }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Location</p>
+                            <h5>{{ user_obj.city|default:'Not provided' }}{% if user_obj.city and user_obj.state %}, {% endif %}{{ user_obj.state|default:'' }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Phone</p>
+                            <h5>{{ user_obj.phone|default:'Not provided' }}</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="text-muted mb-1">Member since</p>
+                            <h5>{{ user_obj.date_joined|date:'d M Y' }}</h5>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-3 mt-4">
+                        <a href="{% url user_obj.get_dashboard_url %}" class="btn btn-gab">Open dashboard</a>
+                        <a href="{% url 'logout' %}" class="btn btn-outline-secondary">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

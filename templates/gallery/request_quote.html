@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="card auth-card">
+        <div class="auth-header">
+            <h2 class="mb-1">Request a quote</h2>
+            <p class="mb-0 opacity-75">{{ product.name }} from {{ product.supplier }}</p>
+        </div>
+        <div class="card-body p-4 p-lg-5">
+            <p class="text-muted">The seller will respond to your request in GAB.</p>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-gab">Send request</button>
+                    <a href="{% url 'product_detail' product.slug %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="card auth-card">
+        <div class="auth-header">
+            <h2 class="mb-1">{% if product %}Edit product{% else %}Add a product{% endif %}</h2>
+            <p class="mb-0 opacity-75">List your product in the GAB catalog</p>
+        </div>
+        <div class="card-body p-4 p-lg-5">
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+                {% if product.image %}
+                    <div class="mb-3">
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid rounded" style="max-height: 220px;">
+                    </div>
+                {% endif %}
+                {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>{% endif %}
+                    </div>
+                {% endfor %}
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-gab">{% if product %}Save changes{% else %}Publish product{% endif %}</button>
+                    <a href="{% url 'my_products' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

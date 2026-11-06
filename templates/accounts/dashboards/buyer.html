@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <p class="text-uppercase text-info small fw-bold mb-1">Buyer dashboard</p>
+            <h2 class="mb-0">Welcome, {{ user.username }}</h2>
+        </div>
+        <a href="{% url 'profile' %}" class="btn btn-outline-info">Profile</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="card dashboard-card h-100 p-4">
+                <h6 class="text-muted">Quote requests sent</h6>
+                <h3 class="mt-2 mb-0">{{ quote_request_count }}</h3>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card dashboard-card h-100 p-4">
+                <h6 class="text-muted">Find products</h6>
+                <h3 class="mt-2 mb-0"><a href="{% url 'catalog' %}" class="text-decoration-none">Catalog</a></h3>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card dashboard-card h-100 p-4">
+                <h6 class="text-muted">My enquiries</h6>
+                <h3 class="mt-2 mb-0"><a href="{% url 'buyer_quotes' %}" class="text-decoration-none">View</a></h3>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card dashboard-card h-100 p-4">
+                <h6 class="text-muted">Connect with sellers</h6>
+                <h3 class="mt-2 mb-0">Request a quote</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-5 mb-3">
+        <h4 class="mb-0">Recent quote requests</h4>
+        <a href="{% url 'buyer_quotes' %}">View all</a>
+    </div>
+    {% if quote_requests %}
+        <div class="list-group">
+            {% for quote in quote_requests %}
+                <a href="{% url 'product_detail' quote.product.slug %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <span>{{ quote.product.name }} <small class="text-muted">from {{ quote.seller.business_name|default:quote.seller.username }}</small></span>
+                    <span class="badge text-bg-secondary">{{ quote.get_status_display }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">You haven't sent a quote request yet. Browse the catalog to find a product.</p>
+    {% endif %}
+</div>
+{% endblock %}

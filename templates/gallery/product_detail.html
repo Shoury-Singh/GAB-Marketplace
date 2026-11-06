@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-shell {
+        padding: 52px 0 64px;
+    }
+    .product-detail-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 18px 36px rgba(15, 23, 42, 0.05);
+    }
+    .detail-visual {
+        height: 420px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 26px;
+        background: linear-gradient(135deg, {{ product.accent }}, rgba(15,23,42,0.75));
+        position: relative;
+    }
+    .detail-visual img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .detail-visual::before {
+        content: "";
+        position: absolute;
+        top: 26px;
+        right: 48px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.16);
+    }
+    .detail-visual::after {
+        content: "";
+        position: absolute;
+        left: 40px;
+        bottom: 42px;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.1);
+    }
+    .detail-chip {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        background: rgba(255,255,255,0.14);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.28);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+    }
+    .detail-body {
+        padding: 30px;
+    }
+    .detail-body h1 {
+        color: #0b1f38;
+        font-size: clamp(2rem, 3vw, 2.8rem);
+        font-weight: 800;
+        margin-bottom: 12px;
+    }
+    .detail-rating {
+        color: #f59e0b;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .detail-meta {
+        color: #64748b;
+        margin-bottom: 18px;
+    }
+    .detail-price {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+    .detail-price strong {
+        font-size: 2.1rem;
+        color: #0b1f38;
+    }
+    .detail-price span {
+        font-size: 1rem;
+        color: #94a3b8;
+        text-decoration: line-through;
+    }
+    .detail-summary {
+        color: #334155;
+        line-height: 1.7;
+        margin-bottom: 22px;
+    }
+    .detail-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+    .detail-facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .fact-box {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #f8fafc;
+        padding: 16px;
+    }
+    .fact-box small {
+        display: block;
+        color: #64748b;
+        margin-bottom: 6px;
+    }
+    .fact-box strong {
+        color: #0b1f38;
+    }
+    .related-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #0b1f38;
+        margin: 42px 0 18px;
+    }
+    .related-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+    }
+    .mini-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 18px;
+        text-decoration: none;
+        color: inherit;
+    }
+    .mini-card:hover {
+        text-decoration: none;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+    .mini-thumb {
+        height: 120px;
+        border-radius: 14px;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, {{ product.accent }}, rgba(15,23,42,0.7));
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container detail-shell">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item"><a href="{% url 'catalog' %}">Catalog</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.category }}</li>
+        </ol>
+    </nav>
+
+    <div class="product-detail-card">
+        <div class="row g-0 align-items-stretch">
+            <div class="col-lg-6">
+                <div class="detail-visual">
+                    {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                    {% endif %}
+                    <span class="detail-chip">{{ product.category }}</span>
+                    <span class="detail-chip">{{ product.stock_status }}</span>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="detail-body">
+                    <h1>{{ product.name }}</h1>
+                    {% if product.review_count %}
+                        <div class="detail-rating">★★★★★ {{ product.rating }} · {{ product.review_count }} reviews</div>
+                    {% else %}
+                        <div class="detail-meta">No reviews yet</div>
+                    {% endif %}
+                    <div class="detail-meta">
+                        {{ product.supplier }} · {{ product.location }}
+                        {% if product.owner %} · {{ product.owner.get_role_display }}{% endif %}
+                    </div>
+
+                    <div class="detail-price">
+                        <strong>₹{{ product.price }}</strong>
+                        {% if product.old_price %}<span>₹{{ product.old_price }}</span>{% endif %}
+                    </div>
+
+                    <p class="detail-summary">{{ product.description }}</p>
+
+                    <div class="detail-actions">
+                        {% if product.owner %}
+                            {% if user.is_authenticated and product.owner_id == user.id %}
+                                <a href="{% url 'edit_product' product.pk %}" class="btn btn-primary btn-lg">Manage your listing</a>
+                            {% else %}
+                                <a href="{% url 'request_quote' product.slug %}" class="btn btn-primary btn-lg">Request Quote</a>
+                            {% endif %}
+                        {% else %}
+                            <span class="btn btn-outline-secondary btn-lg disabled">Seller unavailable</span>
+                        {% endif %}
+                        <a href="{% url 'catalog' %}" class="btn btn-outline-primary btn-lg">Back to Catalog</a>
+                    </div>
+
+                    <div class="detail-facts">
+                        <div class="fact-box">
+                            <small>Minimum order</small>
+                            <strong>{{ product.minimum_order }} units</strong>
+                        </div>
+                        <div class="fact-box">
+                            <small>Delivery</small>
+                            <strong>3–7 days</strong>
+                        </div>
+                        <div class="fact-box">
+                            <small>Supplier type</small>
+                            <strong>Verified</strong>
+                        </div>
+                        <div class="fact-box">
+                            <small>Availability</small>
+                            <strong>{{ product.stock_status }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if related_products %}
+    <h2 class="related-title">Related products</h2>
+    <div class="related-grid">
+        {% for item in related_products %}
+        <a href="{% url 'product_detail' item.slug %}" class="mini-card">
+            <div class="mini-thumb" style="background: linear-gradient(135deg, {{ item.accent }}, rgba(15,23,42,0.7));"></div>
+            <div class="fw-bold mb-1">{{ item.name }}</div>
+            <div class="text-muted small mb-2">{{ item.supplier }}</div>
+            <div class="fw-bold text-primary">₹{{ item.price }}</div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

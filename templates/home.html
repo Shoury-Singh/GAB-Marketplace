@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block title %}GAB Platform — Grow All kind of Business{% endblock %}
+
+{% block content %}
+<!-- HERO -->
+<section class="hero-section">
+    <div class="container position-relative">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <h1 class="hero-title">
+                    Connect. Trade.<br>
+                    <span>Grow Together.</span>
+                </h1>
+                <p class="hero-subtitle">
+                    India's smart B2B network where Industries, Wholesalers, Shopkeepers and Buyers directly connect — no middlemen, more profit.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{% url 'catalog' %}" class="btn btn-hero">
+                        <i class="bi bi-grid-3x3-gap me-2"></i>Explore Catalog
+                    </a>
+                    <a href="{% url 'images_show' %}" class="btn btn-hero-outline">
+                        <i class="bi bi-images me-2"></i>Explore Gallery
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-5 d-none d-lg-block text-center">
+                <div class="p-4">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="bg-white bg-opacity-10 rounded-4 p-4 text-center">
+                                <i class="bi bi-building display-5 text-info"></i>
+                                <div class="mt-2 fw-semibold">Industry</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-white bg-opacity-10 rounded-4 p-4 text-center">
+                                <i class="bi bi-box-seam display-5 text-warning"></i>
+                                <div class="mt-2 fw-semibold">Wholesaler</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-white bg-opacity-10 rounded-4 p-4 text-center">
+                                <i class="bi bi-shop display-5 text-success"></i>
+                                <div class="mt-2 fw-semibold">Shopkeeper</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-white bg-opacity-10 rounded-4 p-4 text-center">
+                                <i class="bi bi-person-check display-5 text-primary"></i>
+                                <div class="mt-2 fw-semibold">Buyer</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% include 'gallery/_seller_banners.html' %}
+
+<!-- HOW IT WORKS -->
+<section class="py-5">
+    <div class="container py-4">
+        <div class="text-center mb-5">
+            <h2 class="section-title">How GAB Works</h2>
+            <p class="text-muted">Simple 3-step connection for every business role</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon bg-primary-soft text-primary mx-auto">
+                        <i class="bi bi-person-plus-fill"></i>
+                    </div>
+                    <h5 class="fw-bold">1. Register Free</h5>
+                    <p class="text-muted small mb-0">Choose your role — Industry, Wholesaler, Shopkeeper or Buyer and create your account in 1 minute.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon bg-accent-soft text-accent mx-auto">
+                        <i class="bi bi-link-45deg"></i>
+                    </div>
+                    <h5 class="fw-bold">2. Connect Directly</h5>
+                    <p class="text-muted small mb-0">Shopkeepers find Wholesalers. Wholesalers source from Industries. No extra layers.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon bg-success-soft text-success mx-auto">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <h5 class="fw-bold">3. Grow Business</h5>
+                    <p class="text-muted small mb-0">Upload products, showcase images, get enquiries and scale your business faster.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ROLES -->
+<section class="py-5 bg-white">
+    <div class="container py-4">
+        <div class="text-center mb-5">
+            <h2 class="section-title">Built for Every Role</h2>
+            <p class="text-muted">One platform. Four powerful experiences.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card text-center h-100">
+                    <div class="feature-icon bg-primary-soft text-primary mx-auto">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    <h5 class="fw-bold">Industry</h5>
+                    <p class="text-muted small">Showcase factory products & supply directly to Wholesalers.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card text-center h-100">
+                    <div class="feature-icon bg-warning-soft text-warning mx-auto">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <h5 class="fw-bold">Wholesaler</h5>
+                    <p class="text-muted small">Source from Industries & supply bulk to Shopkeepers.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card text-center h-100">
+                    <div class="feature-icon bg-success-soft text-success mx-auto">
+                        <i class="bi bi-shop"></i>
+                    </div>
+                    <h5 class="fw-bold">Shopkeeper</h5>
+                    <p class="text-muted small">Connect with trusted Wholesalers and stock your shop easily.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card text-center h-100">
+                    <div class="feature-icon bg-accent-soft text-accent mx-auto">
+                        <i class="bi bi-bag-heart"></i>
+                    </div>
+                    <h5 class="fw-bold">Buyer</h5>
+                    <p class="text-muted small">Discover products from local shops & businesses near you.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="py-5">
+    <div class="container">
+        <div class="rounded-4 p-5 text-center text-white" style="background: linear-gradient(135deg, #0a2540, #0d3b66);">
+            <h2 class="fw-bold mb-3">Ready to grow your business?</h2>
+            <p class="mb-4 opacity-75">Join thousands of businesses already connecting on GAB Platform.</p>
+            <a href="{% url 'register' %}" class="btn btn-hero btn-lg">
+                Create Free Account
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

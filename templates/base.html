@@ -1,0 +1,537 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        try {
+            const savedTheme = localStorage.getItem('gab-theme');
+            if (savedTheme === 'light' || savedTheme === 'dark') {
+                document.documentElement.dataset.bsTheme = savedTheme;
+            }
+        } catch (error) {
+            document.documentElement.dataset.bsTheme = 'light';
+        }
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ page_title|default:"GAB Platform" }}{% endblock %}</title>
+    <meta name="theme-color" content="#0a2540">
+    <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'icons/gab-192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'icons/gab-192.png' %}">
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --gab-primary: #0d6efd;
+            --gab-dark: #0a2540;
+            --gab-accent: #00d4aa;
+        }
+        body {
+            background-color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Inter', sans-serif;
+        }
+        .navbar-gab {
+            background: #0a2540 !important;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.15);
+            padding: 0.7rem 0;
+        }
+        .gab-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none !important;
+        }
+        .gab-logo-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #00d4aa, #0d6efd);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .gab-logo-text {
+            font-weight: 800;
+            font-size: 1.45rem;
+            color: #fff;
+            line-height: 1;
+        }
+        .gab-logo-text span { color: #00d4aa; }
+        .gab-logo-sub {
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 0.5px;
+        }
+        .btn-register {
+            background: #00d4aa;
+            color: #0a2540 !important;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 0.45rem 1.2rem !important;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #0a2540 0%, #0d3b66 100%);
+            color: white;
+            padding: 70px 0 80px;
+        }
+        .hero-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .hero-title span { color: #00d4aa; }
+        .hero-subtitle {
+            font-size: 1.15rem;
+            opacity: 0.9;
+            max-width: 540px;
+        }
+        .btn-hero {
+            background: #00d4aa;
+            color: #0a2540;
+            font-weight: 700;
+            padding: 14px 32px;
+            border-radius: 10px;
+            border: none;
+        }
+        .btn-hero:hover {
+            background: #00e6b8;
+            color: #0a2540;
+        }
+        .btn-hero-outline {
+            background: transparent;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.4);
+            font-weight: 600;
+            padding: 12px 28px;
+            border-radius: 10px;
+        }
+        .feature-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            padding: 28px 24px;
+            height: 100%;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+        }
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .bg-primary-soft { background: rgba(13, 110, 253, 0.1); }
+        .bg-accent-soft { background: rgba(0, 212, 170, 0.1); }
+        .bg-success-soft { background: rgba(25, 135, 84, 0.1); }
+        .bg-warning-soft { background: rgba(255, 193, 7, 0.12); }
+        .text-accent { color: #00d4aa !important; }
+        .section-title {
+            font-weight: 800;
+            font-size: 1.75rem;
+            color: #0a2540;
+        }
+        .dashboard-card {
+            background: white;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            transition: all 0.3s;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .auth-card {
+            max-width: 460px;
+            margin: 40px auto;
+            border: none;
+            border-radius: 18px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+        .auth-header {
+            background: linear-gradient(135deg, #0a2540, #0d3b66);
+            color: white;
+            padding: 32px 24px;
+            text-align: center;
+        }
+        .btn-gab {
+            background: linear-gradient(135deg, #0d6efd, #0a58ca);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-weight: 600;
+            color: white;
+        }
+        .form-control, .form-select {
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+        .footer-gab {
+            background: #0a2540;
+            color: #94a3b8;
+            padding: 50px 0 25px;
+            margin-top: auto;
+        }
+        .footer-gab h6 { color: white; font-weight: 600; }
+        .footer-gab a { color: #94a3b8; text-decoration: none; }
+        .footer-gab a:hover { color: #00d4aa; }
+        .footer-bottom {
+            border-top: 1px solid rgba(255,255,255,0.08);
+            padding-top: 20px;
+            margin-top: 30px;
+            font-size: 0.85rem;
+        }
+        .role-badge {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+        html[data-bs-theme="dark"] body {
+            background-color: #0b1220;
+            color: #e2e8f0;
+        }
+        html[data-bs-theme="dark"] .feature-card,
+        html[data-bs-theme="dark"] .dashboard-card,
+        html[data-bs-theme="dark"] .auth-card .card-body,
+        html[data-bs-theme="dark"] .panel-box,
+        html[data-bs-theme="dark"] .product-card,
+        html[data-bs-theme="dark"] .mini-card,
+        html[data-bs-theme="dark"] .fact-box,
+        html[data-bs-theme="dark"] .list-group-item,
+        html[data-bs-theme="dark"] .card,
+        html[data-bs-theme="dark"] .bg-white {
+            background-color: #152238 !important;
+            color: #e2e8f0;
+            border-color: #2b3b53 !important;
+        }
+        html[data-bs-theme="dark"] .section-title,
+        html[data-bs-theme="dark"] .product-name,
+        html[data-bs-theme="dark"] .detail-body h1,
+        html[data-bs-theme="dark"] .detail-price strong,
+        html[data-bs-theme="dark"] .fact-box strong,
+        html[data-bs-theme="dark"] .mini-card,
+        html[data-bs-theme="dark"] .catalog-main h3 {
+            color: #e2e8f0;
+        }
+        html[data-bs-theme="dark"] .text-muted,
+        html[data-bs-theme="dark"] .text-secondary,
+        html[data-bs-theme="dark"] .detail-meta,
+        html[data-bs-theme="dark"] .product-meta {
+            color: #a7b5ca !important;
+        }
+        html[data-bs-theme="dark"] .form-control,
+        html[data-bs-theme="dark"] .form-select,
+        html[data-bs-theme="dark"] .search-form input,
+        html[data-bs-theme="dark"] .search-form select {
+            background-color: #0f1b2e;
+            color: #e2e8f0;
+            border-color: #354760;
+        }
+        html[data-bs-theme="dark"] .form-control::placeholder,
+        html[data-bs-theme="dark"] .search-form input::placeholder {
+            color: #91a0b7;
+        }
+        html[data-bs-theme="dark"] .category-link {
+            background: #0f1b2e;
+            color: #d7e2f1;
+            border-color: #354760;
+        }
+        html[data-bs-theme="dark"] .category-link:hover,
+        html[data-bs-theme="dark"] .category-link.active {
+            background: #173254;
+            border-color: #347ac5;
+            color: #8fc4ff;
+        }
+        .theme-toggle {
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 999px;
+            padding: 0.35rem 0.7rem;
+        }
+        .seller-banner-section {
+            padding-top: 30px;
+            padding-bottom: 30px;
+        }
+        .seller-banner-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+        }
+        .seller-banner-card {
+            position: relative;
+            display: block;
+            min-height: 190px;
+            overflow: hidden;
+            border-radius: 18px;
+            color: #fff;
+            background: #0a2540;
+            text-decoration: none;
+        }
+        .seller-banner-card img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.25s ease;
+        }
+        .seller-banner-card:hover img {
+            transform: scale(1.04);
+        }
+        .seller-banner-copy {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 5px;
+            padding: 20px;
+            background: linear-gradient(transparent 5%, rgba(3, 12, 27, 0.84));
+            color: #fff;
+        }
+        .seller-banner-copy strong {
+            font-size: 1.15rem;
+        }
+        .seller-banner-label {
+            font-size: 0.72rem;
+            opacity: 0.85;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-gab">
+        <div class="container">
+            <a class="navbar-brand gab-logo" href="{% url 'home' %}">
+                <div class="gab-logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+                        <circle cx="6" cy="6" r="2.5" fill="white"/>
+                        <circle cx="18" cy="6" r="2.5" fill="white"/>
+                        <circle cx="12" cy="18" r="2.5" fill="white"/>
+                        <circle cx="12" cy="11" r="2" fill="#00d4aa"/>
+                        <line x1="7.5" y1="7.5" x2="10.5" y2="10" stroke="white" stroke-width="1.5"/>
+                        <line x1="16.5" y1="7.5" x2="13.5" y2="10" stroke="white" stroke-width="1.5"/>
+                        <line x1="12" y1="13" x2="12" y2="15.5" stroke="white" stroke-width="1.5"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="gab-logo-text">GAB<span>.</span></div>
+                    <div class="gab-logo-sub">PLATFORM</div>
+                </div>
+            </a>
+
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+                    <li class="nav-item">
+                        <button id="theme-toggle" class="nav-link theme-toggle" type="button" aria-label="Switch to dark theme" aria-pressed="false">
+                            <i id="theme-toggle-icon" class="bi bi-moon-stars" aria-hidden="true"></i>
+                            <span id="theme-toggle-label">Dark theme</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button id="gab-install-button" class="nav-link btn btn-outline-light ms-lg-2" type="button" hidden style="display:none">
+                            <i class="bi bi-download me-1"></i>Install GAB
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'catalog' %}">
+                            <i class="bi bi-grid-3x3-gap me-1"></i> Catalog
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'images_show' %}">
+                            <i class="bi bi-images me-1"></i> Gallery
+                        </a>
+                    </li>
+
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'my_images' %}">My Images</a>
+                        </li>
+                        {% if user.is_industry or user.is_wholesaler or user.is_shopkeeper %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'my_banners' %}">My Ads</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'my_products' %}">My Products</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'seller_quotes' %}">Quote Requests</a>
+                            </li>
+                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'buyer_quotes' %}">My Enquiries</a>
+                        </li>
+                        <li class="nav-item d-none d-lg-block">
+                            <span class="nav-link text-white-50 small">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ user.username }}
+                                <span class="badge bg-info role-badge ms-1">{{ user.get_role_display }}</span>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'profile' %}">Profile</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url user.get_dashboard_url %}">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-warning" href="{% url 'logout' %}">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'login' %}">Login</a>
+                        </li>
+                        <li class="nav-item ms-lg-2">
+                            <a class="nav-link btn-register" href="{% url 'register' %}">Register Free</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="container mt-3">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="flex-grow-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer-gab">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <div class="gab-logo-icon" style="width:32px;height:32px;">
+                            <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
+                                <circle cx="6" cy="6" r="2.5" fill="white"/>
+                                <circle cx="18" cy="6" r="2.5" fill="white"/>
+                                <circle cx="12" cy="18" r="2.5" fill="white"/>
+                                <circle cx="12" cy="11" r="2" fill="#00d4aa"/>
+                            </svg>
+                        </div>
+                        <strong class="text-white fs-5">GAB Platform</strong>
+                    </div>
+                    <p class="small mb-0">Grow All kind of Business. Connecting Industries, Wholesalers, Shopkeepers & Buyers.</p>
+                </div>
+                <div class="col-6 col-md-2">
+                    <h6>Platform</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="{% url 'catalog' %}">Product Catalog</a></li>
+                        <li class="mb-2"><a href="{% url 'images_show' %}">Image Gallery</a></li>
+                        <li class="mb-2"><a href="{% url 'register' %}">Join Network</a></li>
+                        <li class="mb-2"><a href="{% url 'login' %}">Login</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>For Business</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="{% url 'register' %}">Industry</a></li>
+                        <li class="mb-2"><a href="{% url 'register' %}">Wholesaler</a></li>
+                        <li class="mb-2"><a href="{% url 'register' %}">Shopkeeper</a></li>
+                        <li class="mb-2"><a href="{% url 'register' %}">Buyer</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6>Contact</h6>
+                    <p class="small mb-1"><i class="bi bi-geo-alt me-1"></i> Raebareli, Uttar Pradesh</p>
+                    <p class="small mb-0"><i class="bi bi-envelope me-1"></i> support@gabplatform.in</p>
+                </div>
+            </div>
+            <div class="footer-bottom text-center">
+                <p class="mb-0">&copy; 2026 GAB Platform — Grow All kind of Business. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register("{% url 'service_worker' %}")
+                    .catch((error) => console.error('GAB service worker registration failed:', error));
+            });
+        }
+
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeToggleIcon = document.getElementById('theme-toggle-icon');
+        const themeToggleLabel = document.getElementById('theme-toggle-label');
+        function updateThemeToggle(theme) {
+            const isDark = theme === 'dark';
+            themeToggle.setAttribute('aria-pressed', String(isDark));
+            themeToggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+            themeToggleLabel.textContent = isDark ? 'Light theme' : 'Dark theme';
+            themeToggleIcon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
+        }
+        updateThemeToggle(document.documentElement.dataset.bsTheme || 'light');
+        themeToggle.addEventListener('click', () => {
+            const theme = document.documentElement.dataset.bsTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.bsTheme = theme;
+            updateThemeToggle(theme);
+            try {
+                localStorage.setItem('gab-theme', theme);
+            } catch (error) {
+                console.warn('Theme preference could not be saved.', error);
+            }
+        });
+
+        let installPrompt;
+        const installButton = document.getElementById('gab-install-button');
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            installPrompt = event;
+            installButton.hidden = false;
+            installButton.style.display = 'inline-block';
+        });
+        installButton.addEventListener('click', async () => {
+            if (!installPrompt) return;
+            installPrompt.prompt();
+            await installPrompt.userChoice;
+            installPrompt = null;
+            installButton.hidden = true;
+            installButton.style.display = 'none';
+        });
+        window.addEventListener('appinstalled', () => {
+            installButton.hidden = true;
+            installButton.style.display = 'none';
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
