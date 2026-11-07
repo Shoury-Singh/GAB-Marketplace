@@ -1,5 +1,93 @@
 # GAB Platform
 
+## Live demo
+
+**Live demo:** [https://www.gabpt.com](https://www.gabpt.com). This configured
+public domain was not reachable when this README was updated.
+The link will work as a live demo once DNS and the Render deployment are active.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Visitor[Buyer, seller, or visitor] -->|HTTPS| Render[Render web service]
+    Render --> Django[Django application]
+    Django --> Accounts[Accounts: login, profiles, password recovery]
+    Django --> Gallery[Marketplace: products, quotes, images, banners]
+    Django --> Templates[HTML templates and static assets]
+    Django --> Database[(PostgreSQL in production)]
+    Django --> Media[(Persistent media disk)]
+    Django -. email configuration .-> SMTP[SMTP provider]
+    Local[Local development] --> Django
+    Local --> SQLite[(SQLite)]
+```
+
+In production, Render runs Django with PostgreSQL and a persistent disk for
+uploaded media. Local development uses SQLite. Password-reset email is sent
+through SMTP when the mail environment variables are configured.
+
+## Database relationships
+
+```mermaid
+erDiagram
+    USER ||--o{ PRODUCT : owns
+    USER ||--o{ GALLERY_IMAGE : uploads
+    USER ||--o{ SELLER_BANNER : owns
+    USER ||--o{ QUOTE_REQUEST : submits
+    USER ||--o{ QUOTE_REQUEST : receives
+    PRODUCT ||--o{ QUOTE_REQUEST : receives
+    USER o|--o{ PASSWORD_RESET_CHALLENGE : verifies
+
+    USER {
+        string username
+        string role
+        string business_name
+        string email
+    }
+    PRODUCT {
+        string name
+        string slug
+        string category
+        decimal price
+        integer inventory
+        boolean is_active
+    }
+    QUOTE_REQUEST {
+        integer quantity
+        string status
+        string message
+        string seller_response
+    }
+    GALLERY_IMAGE {
+        string title
+        string image
+        boolean is_active
+    }
+    SELLER_BANNER {
+        string title
+        string image
+        string target_url
+        boolean is_active
+    }
+    PASSWORD_RESET_CHALLENGE {
+        string email_digest
+        datetime expires_at
+        boolean is_used
+    }
+```
+
+Products can remain after their owner is deleted; quote requests protect their
+product and are deleted with either associated user. Gallery images and seller
+banners are deleted with their owner. A password-reset challenge can be
+unassociated with a user.
+
+## Screenshots and demo video
+
+UI screenshots and a short walkthrough video are not included in this checkout.
+Add captures from the deployed or locally running app under `docs/media/` and
+embed them here once available; no example captures are shown as if they were
+the real application.
+
 ## Setup
 
 Create and activate a virtual environment, then install the dependencies:
@@ -72,7 +160,7 @@ current prices before applying the Blueprint.
 
 1. Push the project to the GitHub repository and create a Render account.
 2. In the Render Dashboard, create a **New Blueprint Instance** and connect
-   `Shoury-Singh/GAB-VS-2`. Review the listed service, database, disk, region,
+   `Shoury-Singh/GAB-Marketplace`. Review the listed service, database, disk, region,
    and prices before confirming. The Blueprint wires the database and disk to
    the web service automatically.
 3. Configure SMTP in the web service's environment when you are ready to enable
