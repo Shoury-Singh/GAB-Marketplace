@@ -27,10 +27,33 @@ class UserRegistrationForm(UserCreationForm):
     state = forms.CharField(max_length=100, required=False, widget=forms.TextInput(attrs={
         'class': 'form-control', 'placeholder': 'State'
     }))
+    pincode = forms.RegexField(
+        regex=r'^[1-9][0-9]{5}$',
+        required=False,
+        error_messages={'invalid': 'Enter a valid six-digit Indian PIN code.'},
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'inputmode': 'numeric',
+            'maxlength': '6',
+            'placeholder': 'Six-digit PIN code (optional)',
+        }),
+        help_text='Add your PIN code to find nearby shops and products.',
+    )
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'role', 'phone', 'business_name', 'city', 'state', 'password1', 'password2']
+        fields = [
+            'username',
+            'email',
+            'role',
+            'phone',
+            'business_name',
+            'city',
+            'state',
+            'pincode',
+            'password1',
+            'password2',
+        ]
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Choose a username'}),
         }
@@ -63,9 +86,87 @@ class UserRegistrationForm(UserCreationForm):
         user.business_name = self.cleaned_data.get('business_name', '')
         user.city = self.cleaned_data.get('city', '')
         user.state = self.cleaned_data.get('state', '')
+        user.pincode = self.cleaned_data.get('pincode') or None
         if commit:
             user.save()
         return user
+
+
+class AccountLocationForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ['pincode']
+        labels = {'pincode': 'PIN code'}
+        widgets = {
+            'pincode': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'maxlength': '6',
+                'placeholder': 'Six-digit Indian PIN code',
+            }),
+        }
+
+    def clean_pincode(self):
+        return self.cleaned_data.get('pincode') or None
+
+
+class AddAccountRoleForm(forms.Form):
+    role = forms.ChoiceField(
+        choices=User.Role.choices,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='Role to add',
+    )
+    business_name = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Business, shop, or factory name',
+        }),
+        label='Business name',
+    )
+
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        assigned_roles = set(user.get_available_roles())
+        self.fields['role'].choices = [
+            choice for choice in User.Role.choices
+            if choice[0] not in assigned_roles
+        ]
+        self.fields['business_name'].initial = user.business_name or ''
+
+    def clean(self):
+        cleaned_data = super().clean()
+        role = cleaned_data.get('role')
+        business_name = cleaned_data.get('business_name', '').strip()
+        seller_roles = {
+            User.Role.INDUSTRY,
+            User.Role.WHOLESALER,
+            User.Role.SHOPKEEPER,
+        }
+        if role in seller_roles and not (business_name or self.user.business_name):
+            self.add_error(
+                'business_name',
+                'A business name is required when adding a seller role.',
+            )
+        return cleaned_data
+
+
+class SwitchAccountRoleForm(forms.Form):
+    role = forms.ChoiceField(
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='Active role',
+    )
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        available_roles = set(user.get_available_roles())
+        self.fields['role'].choices = [
+            choice for choice in User.Role.choices
+            if choice[0] in available_roles
+        ]
+        self.fields['role'].initial = user.role
 
 
 class UserLoginForm(AuthenticationForm):

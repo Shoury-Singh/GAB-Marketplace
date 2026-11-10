@@ -7,6 +7,7 @@ urlpatterns = [
     path('password-reset/', views.password_reset_view, name='password_reset'),
     path('logout/', views.logout_view, name='logout'),
     path('profile/', views.profile_view, name='profile'),
+    path('settings/', views.account_settings_view, name='account_settings'),
     path('dashboard/industry/', views.industry_dashboard, name='industry_dashboard'),
     path('dashboard/wholesaler/', views.wholesaler_dashboard, name='wholesaler_dashboard'),
     path('dashboard/shopkeeper/', views.shopkeeper_dashboard, name='shopkeeper_dashboard'),

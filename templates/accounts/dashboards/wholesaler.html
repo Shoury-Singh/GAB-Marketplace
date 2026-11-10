@@ -1,52 +1,70 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
+{% block extra_css %}
+{% include 'accounts/dashboards/_role_dashboard_styles.html' %}
+{% endblock %}
+
 {% block content %}
 <div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <p class="text-uppercase text-warning small fw-bold mb-1">Wholesaler dashboard</p>
-            <h2 class="mb-0">Welcome, {{ user.username }}</h2>
+    <section class="role-dashboard-hero mb-4">
+        <img
+            class="role-dashboard-art"
+            src="{% static 'images/wholesaler-dashboard.png' %}"
+            alt="Wholesalers coordinating product stock, pricing, and delivery"
+        >
+        <div class="role-dashboard-copy">
+            <p class="role-dashboard-label mb-2">Wholesaler dashboard</p>
+            <h1 class="mb-3">Welcome, {{ user.username }}</h1>
+            <p class="text-white-50 mb-4">Manage your stock, respond to buyers, and keep orders moving.</p>
+            <a href="{% url 'profile' %}" class="btn btn-outline-light">View profile</a>
         </div>
-        <a href="{% url 'profile' %}" class="btn btn-outline-warning">Profile</a>
-    </div>
+    </section>
 
     <div class="row g-4">
-        <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
-                <h6 class="text-muted">Pending enquiries</h6>
-                <h3 class="mt-2 mb-0">{{ incoming_quotes }}</h3>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Pending orders</h2>
+                <p class="h3 mt-2 mb-0">{{ incoming_orders }}</p>
+                <a href="{% url 'my_orders' %}" class="small mt-2">Review orders</a>
+            </article>
+        </div>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Pending enquiries</h2>
+                <p class="h3 mt-2 mb-0">{{ incoming_quotes }}</p>
                 <a href="{% url 'seller_quotes' %}" class="small mt-2">View enquiries</a>
-            </div>
+            </article>
         </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
-                <h6 class="text-muted">Active products</h6>
-                <h3 class="mt-2 mb-0">{{ active_products }}</h3>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Active products</h2>
+                <p class="h3 mt-2 mb-0">{{ active_products }}</p>
                 <a href="{% url 'my_products' %}" class="small mt-2">Manage products</a>
-            </div>
+            </article>
         </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
-                <h6 class="text-muted">Product catalog</h6>
-                <h3 class="mt-2 mb-0">Browse</h3>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Product catalog</h2>
+                <p class="h3 mt-2 mb-0">Browse</p>
                 <a href="{% url 'catalog' %}" class="small mt-2">View catalog</a>
-            </div>
+            </article>
         </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
-                <h6 class="text-muted">Grow your business</h6>
-                <h3 class="mt-2 mb-0">GAB</h3>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Grow your business</h2>
+                <p class="h3 mt-2 mb-0">GAB</p>
                 <a href="{% url 'create_product' %}" class="small mt-2">Add a product</a>
-            </div>
+            </article>
         </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
-                <h6 class="text-muted">Promote your business</h6>
-                <h3 class="mt-2 mb-0">{{ active_banners }} live ads</h3>
+        <div class="col-md-6 col-xl-4">
+            <article class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h2 class="h6 text-muted">Promote your business</h2>
+                <p class="h3 mt-2 mb-0">{{ active_banners }} live ads</p>
                 <a href="{% url 'my_banners' %}" class="small mt-2">Manage banners</a>
-            </div>
+            </article>
         </div>
     </div>
 </div>

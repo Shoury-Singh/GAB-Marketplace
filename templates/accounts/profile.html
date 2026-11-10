@@ -37,6 +37,10 @@
                             <h5>{{ user_obj.city|default:'Not provided' }}{% if user_obj.city and user_obj.state %}, {% endif %}{{ user_obj.state|default:'' }}</h5>
                         </div>
                         <div class="col-md-6">
+                            <p class="text-muted mb-1">PIN code</p>
+                            <h5>{{ user_obj.pincode|default:'Not provided' }}</h5>
+                        </div>
+                        <div class="col-md-6">
                             <p class="text-muted mb-1">Phone</p>
                             <h5>{{ user_obj.phone|default:'Not provided' }}</h5>
                         </div>
@@ -48,6 +52,7 @@
 
                     <div class="d-flex flex-wrap gap-3 mt-4">
                         <a href="{% url user_obj.get_dashboard_url %}" class="btn btn-gab">Open dashboard</a>
+                        <a href="{% url 'account_settings' %}" class="btn btn-outline-primary">Manage roles</a>
                         <a href="{% url 'logout' %}" class="btn btn-outline-secondary">Logout</a>
                     </div>
                 </div>

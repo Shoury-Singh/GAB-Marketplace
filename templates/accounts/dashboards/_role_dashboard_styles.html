@@ -1,0 +1,67 @@
+<style>
+    .role-dashboard-hero {
+        position: relative;
+        isolation: isolate;
+        display: flex;
+        align-items: center;
+        min-height: 310px;
+        padding: clamp(1.5rem, 5vw, 3.25rem);
+        overflow: hidden;
+        border-radius: 24px;
+        color: #fff;
+        background: linear-gradient(120deg, #0b1f38, #123b6e 72%, #176b70);
+        box-shadow: 0 16px 36px rgba(10, 37, 64, 0.18);
+    }
+    .role-dashboard-hero::before {
+        content: "";
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(10, 37, 64, 0.15), rgba(10, 37, 64, 0.08) 50%, transparent 85%);
+        pointer-events: none;
+    }
+    .role-dashboard-art {
+        position: absolute;
+        z-index: 0;
+        right: 0;
+        bottom: 0;
+        width: 66%;
+        height: 100%;
+        object-fit: contain;
+        object-position: right bottom;
+    }
+    .role-dashboard-copy {
+        position: relative;
+        z-index: 2;
+        max-width: 520px;
+    }
+    .role-dashboard-copy h1 {
+        font-size: clamp(1.8rem, 4vw, 2.7rem);
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+    .role-dashboard-label {
+        color: #68f0d2;
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .role-dashboard-card {
+        border: 0;
+        border-radius: 18px;
+        box-shadow: 0 8px 24px rgba(10, 37, 64, 0.1);
+    }
+    @media (max-width: 767.98px) {
+        .role-dashboard-hero {
+            min-height: 390px;
+            align-items: flex-start;
+            padding-bottom: 10rem;
+        }
+        .role-dashboard-art {
+            width: 100%;
+            height: 62%;
+            opacity: 0.9;
+        }
+    }
+</style>

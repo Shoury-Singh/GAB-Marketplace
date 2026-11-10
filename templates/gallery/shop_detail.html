@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <a href="{% url 'shops' %}" class="small text-decoration-none">&larr; All shops</a>
+    <header class="card dashboard-card p-4 p-md-5 mt-3 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <p class="text-uppercase text-primary small fw-bold mb-1">Shopkeeper store</p>
+                <h1 class="h2 fw-bold mb-2">{{ shop.business_name|default:shop.username }}</h1>
+                <p class="text-muted mb-0">
+                    {% if shop.city or shop.state %}{{ shop.city }}{% if shop.city and shop.state %}, {% endif %}{{ shop.state }}{% else %}India{% endif %}
+                    · India Standard Time
+                </p>
+            </div>
+            {% if shop.shop_is_open %}
+            <span class="badge rounded-pill text-bg-success fs-6">Open now</span>
+            {% else %}
+            <span class="badge rounded-pill text-bg-secondary fs-6">Closed now</span>
+            {% endif %}
+        </div>
+        {% if shop.shop_status_changed_at %}
+        <p class="small text-muted mt-3 mb-0">
+            Status updated {{ shop.shop_status_changed_at|date:"M j, Y, g:i a" }} IST.
+            Order requests can still be sent while the shop is closed.
+        </p>
+        {% else %}
+        <p class="small text-muted mt-3 mb-0">The shop has not opened yet. Order requests can still be sent and will be handled when the shop opens.</p>
+        {% endif %}
+    </header>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <div>
+            <h2 class="h4 fw-bold mb-1">Products</h2>
+            <p class="text-muted mb-0">Products sold directly by this shop.</p>
+        </div>
+    </div>
+    <div class="row g-4">
+        {% for product in products %}
+        <div class="col-sm-6 col-xl-4">
+            <article class="card dashboard-card h-100 overflow-hidden">
+                {% if product.image %}
+                <img src="{{ product.image.url }}" alt="{{ product.name }}" class="w-100" style="height: 200px; object-fit: cover;">
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <p class="small text-muted mb-1">{{ product.category }}</p>
+                    <h3 class="h5 fw-bold">{{ product.name }}</h3>
+                    <p class="text-muted small">{{ product.stock_status }} · Minimum {{ product.minimum_order }}</p>
+                    <p class="h5 fw-bold text-primary">₹{{ product.price }}</p>
+                    <a href="{% url 'product_detail' product.slug %}" class="btn btn-primary mt-auto">View product</a>
+                </div>
+            </article>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="card dashboard-card text-center p-5">
+                <p class="text-muted mb-0">This shop has no active products right now.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

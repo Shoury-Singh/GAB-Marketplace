@@ -1,38 +1,58 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ page_title }}{% endblock %}
 
+{% block extra_css %}
+{% include 'accounts/dashboards/_role_dashboard_styles.html' %}
+{% endblock %}
+
 {% block content %}
 <div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <p class="text-uppercase text-info small fw-bold mb-1">Buyer dashboard</p>
-            <h2 class="mb-0">Welcome, {{ user.username }}</h2>
+    <section class="role-dashboard-hero mb-4">
+        <img
+            class="role-dashboard-art"
+            src="{% static 'images/buyer-dashboard.png' %}"
+            alt="Customers browsing products and preparing a shop order"
+        >
+        <div class="role-dashboard-copy">
+            <p class="role-dashboard-label mb-2">Buyer dashboard</p>
+            <h1 class="mb-3">Welcome, {{ user.username }}</h1>
+            <p class="text-white-50 mb-4">Explore local shops, discover products, and stay connected with sellers.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'shops' %}" class="btn btn-outline-light">Explore shops</a>
+                <a href="{% url 'profile' %}" class="btn btn-outline-light">View profile</a>
+            </div>
         </div>
-        <a href="{% url 'profile' %}" class="btn btn-outline-info">Profile</a>
-    </div>
+    </section>
 
     <div class="row g-4">
         <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
+            <div class="card dashboard-card role-dashboard-card h-100 p-4">
                 <h6 class="text-muted">Quote requests sent</h6>
                 <h3 class="mt-2 mb-0">{{ quote_request_count }}</h3>
             </div>
         </div>
         <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
+            <div class="card dashboard-card role-dashboard-card h-100 p-4">
+                <h6 class="text-muted">Explore shops</h6>
+                <h3 class="mt-2 mb-0"><a href="{% url 'shops' %}" class="text-decoration-none">Shop directory</a></h3>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="card dashboard-card role-dashboard-card h-100 p-4">
                 <h6 class="text-muted">Find products</h6>
                 <h3 class="mt-2 mb-0"><a href="{% url 'catalog' %}" class="text-decoration-none">Catalog</a></h3>
             </div>
         </div>
         <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
+            <div class="card dashboard-card role-dashboard-card h-100 p-4">
                 <h6 class="text-muted">My enquiries</h6>
                 <h3 class="mt-2 mb-0"><a href="{% url 'buyer_quotes' %}" class="text-decoration-none">View</a></h3>
             </div>
         </div>
         <div class="col-md-6 col-xl-3">
-            <div class="card dashboard-card h-100 p-4">
+            <div class="card dashboard-card role-dashboard-card h-100 p-4">
                 <h6 class="text-muted">Connect with sellers</h6>
                 <h3 class="mt-2 mb-0">Request a quote</h3>
             </div>

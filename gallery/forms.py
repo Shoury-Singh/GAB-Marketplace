@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import GalleryImage, Product, QuoteRequest, SellerBanner
+from .models import GalleryImage, Order, Product, QuoteRequest, SellerBanner
 
 
 class GalleryImageForm(forms.ModelForm):
@@ -121,6 +121,60 @@ class QuoteResponseForm(forms.ModelForm):
         self.fields['status'].choices = [
             (QuoteRequest.Status.QUOTED, 'Quoted'),
             (QuoteRequest.Status.DECLINED, 'Declined'),
+        ]
+
+
+class OrderCreateForm(forms.Form):
+    quantity = forms.IntegerField(
+        min_value=1,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+    )
+    notes = forms.CharField(
+        required=False,
+        max_length=1000,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 4,
+            'placeholder': 'Share product customizations or other order details.',
+        }),
+    )
+
+    def __init__(self, *args, product, **kwargs):
+        self.product = product
+        super().__init__(*args, **kwargs)
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data['quantity']
+        if quantity < self.product.minimum_order:
+            raise forms.ValidationError(
+                f'The minimum order for this product is {self.product.minimum_order}.'
+            )
+        if quantity > self.product.inventory:
+            raise forms.ValidationError(
+                f'Only {self.product.inventory} units are currently available.'
+            )
+        return quantity
+
+
+class OrderMessageForm(forms.Form):
+    body = forms.CharField(
+        max_length=2000,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Message the buyer or supplier about this order.',
+        }),
+    )
+
+
+class OrderStatusForm(forms.Form):
+    status = forms.ChoiceField(widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, allowed_statuses, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = dict(Order.Status.choices)
+        self.fields['status'].choices = [
+            (status, choices[status]) for status in allowed_statuses
         ]
 
 

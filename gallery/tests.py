@@ -7,7 +7,15 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
-from gallery.models import GalleryImage, Product, QuoteRequest
+from accounts.models import PincodeLocation
+from gallery.models import (
+    GalleryImage,
+    Order,
+    OrderMessage,
+    Product,
+    QuoteRequest,
+    SellerBanner,
+)
 
 
 User = get_user_model()
@@ -24,7 +32,7 @@ class MarketplaceFlowTests(TestCase):
         self.seller = User.objects.create_user(
             username='seller',
             password='test-password-123',
-            role=User.Role.INDUSTRY,
+            role=User.Role.SHOPKEEPER,
             business_name='Seller Works',
             city='Surat',
             state='Gujarat',
@@ -61,8 +69,10 @@ class MarketplaceFlowTests(TestCase):
         self.assertEqual(product.owner, self.seller)
         self.assertEqual(product.supplier, 'Seller Works')
         self.assertEqual(product.location, 'Surat, Gujarat')
+        self.client.force_login(self.buyer)
         catalog_response = self.client.get(reverse('catalog'))
         self.assertContains(catalog_response, 'Linen Fabric')
+        self.client.force_login(self.seller)
         self.assertContains(
             self.client.get(reverse('my_products')),
             'Linen Fabric',
@@ -94,6 +104,7 @@ class MarketplaceFlowTests(TestCase):
         self.assertRedirects(response, reverse('my_products'))
         product = Product.objects.get(name='Linen Fabric')
         self.assertTrue(product.image.name.startswith('products/'))
+        self.client.force_login(self.buyer)
         self.assertContains(self.client.get(reverse('catalog')), product.image.url)
         self.assertContains(
             self.client.get(reverse('product_detail', args=[product.slug])),
@@ -174,6 +185,153 @@ class MarketplaceFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(QuoteRequest.objects.exists())
         self.assertContains(response, 'minimum order for this product is 5')
+
+    def test_buyer_can_create_an_order_and_supplier_can_message_them(self):
+        self.client.force_login(self.buyer)
+        response = self.client.post(
+            reverse('create_order', args=[self.product.slug]),
+            {'quantity': '8', 'notes': 'Please use custom blue packaging.'},
+        )
+
+        order = Order.objects.get()
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(order.buyer, self.buyer)
+        self.assertEqual(order.seller, self.seller)
+        self.assertEqual(order.status, Order.Status.PENDING)
+        buyer_orders = self.client.get(reverse('my_orders'))
+        self.assertContains(buyer_orders, 'Cotton Fabric')
+        self.assertContains(buyer_orders, 'Orders &amp; chat')
+        self.assertContains(
+            self.client.get(reverse('order_detail', args=[order.pk])),
+            'custom blue packaging',
+        )
+
+        self.client.force_login(self.seller)
+        self.assertContains(self.client.get(reverse('my_orders')), 'Cotton Fabric')
+        response = self.client.post(
+            reverse('send_order_message', args=[order.pk]),
+            {'body': 'We can customize the packaging.'},
+        )
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        message = OrderMessage.objects.get()
+        self.assertEqual(message.sender, self.seller)
+        self.assertEqual(message.order, order)
+
+        self.client.force_login(self.buyer)
+        self.assertContains(
+            self.client.get(reverse('order_detail', args=[order.pk])),
+            'We can customize the packaging.',
+        )
+
+    def test_order_status_updates_follow_the_supplier_workflow(self):
+        order = Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+        )
+        status_url = reverse('update_order_status', args=[order.pk])
+        self.client.force_login(self.seller)
+
+        response = self.client.post(status_url, {'status': Order.Status.SHIPPED})
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+        for status in [
+            Order.Status.ACCEPTED,
+            Order.Status.PROCESSING,
+            Order.Status.SHIPPED,
+            Order.Status.DELIVERED,
+        ]:
+            response = self.client.post(status_url, {'status': status})
+            self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+            order.refresh_from_db()
+            self.assertEqual(order.status, status)
+            if status == Order.Status.ACCEPTED:
+                self.product.refresh_from_db()
+                self.assertEqual(self.product.inventory, 92)
+
+        response = self.client.post(status_url, {'status': Order.Status.CANCELLED})
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.DELIVERED)
+
+    def test_buyer_can_cancel_pending_order_but_other_users_cannot_access_it(self):
+        order = Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+        )
+        self.client.force_login(self.buyer)
+        response = self.client.post(
+            reverse('update_order_status', args=[order.pk]),
+            {'status': Order.Status.CANCELLED},
+        )
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+
+        accepted_order = Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+            status=Order.Status.ACCEPTED,
+        )
+        self.product.inventory -= accepted_order.quantity
+        self.product.save(update_fields=['inventory'])
+        response = self.client.post(
+            reverse('update_order_status', args=[accepted_order.pk]),
+            {'status': Order.Status.CANCELLED},
+        )
+        self.assertRedirects(response, reverse('order_detail', args=[accepted_order.pk]))
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.inventory, 100)
+
+        other_buyer = User.objects.create_user(
+            username='other-buyer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        self.client.force_login(other_buyer)
+        self.assertEqual(
+            self.client.get(reverse('order_detail', args=[order.pk])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse('send_order_message', args=[order.pk]),
+                {'body': 'Unauthorized message'},
+            ).status_code,
+            404,
+        )
+        self.assertFalse(OrderMessage.objects.exists())
+
+    def test_order_quantity_must_meet_minimum_and_available_inventory(self):
+        self.client.force_login(self.buyer)
+        order_url = reverse('create_order', args=[self.product.slug])
+        response = self.client.post(order_url, {'quantity': '4', 'notes': ''})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'minimum order for this product is 5')
+        self.assertFalse(Order.objects.exists())
+
+        response = self.client.post(order_url, {'quantity': '101', 'notes': ''})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Only 100 units are currently available')
+        self.assertFalse(Order.objects.exists())
+
+    def test_supplier_cannot_place_a_buyer_order(self):
+        self.client.force_login(self.seller)
+
+        response = self.client.post(
+            reverse('create_order', args=[self.product.slug]),
+            {'quantity': '8', 'notes': ''},
+        )
+
+        self.assertRedirects(response, reverse('shopkeeper_dashboard'))
+        self.assertFalse(Order.objects.exists())
 
     def test_seller_cannot_edit_another_sellers_product(self):
         other_seller = User.objects.create_user(
@@ -287,3 +445,264 @@ class MarketplaceFlowTests(TestCase):
         self.client.force_login(other_seller)
         response = self.client.get(reverse('edit_banner', args=[banner.pk]))
         self.assertEqual(response.status_code, 404)
+
+
+class SupplyChainMarketplaceTests(TestCase):
+    def setUp(self):
+        self.industry = User.objects.create_user(
+            username='industry',
+            password='test-password-123',
+            role=User.Role.INDUSTRY,
+            business_name='Factory One',
+        )
+        self.wholesaler = User.objects.create_user(
+            username='wholesaler',
+            password='test-password-123',
+            role=User.Role.WHOLESALER,
+            business_name='Wholesale One',
+        )
+        self.shopkeeper = User.objects.create_user(
+            username='shopkeeper',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            business_name='Local Shop',
+            city='Surat',
+            state='Gujarat',
+        )
+        self.customer = User.objects.create_user(
+            username='customer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        self.industry_product = Product.objects.create(
+            name='Factory fabric',
+            owner=self.industry,
+            inventory=100,
+        )
+        self.wholesale_product = Product.objects.create(
+            name='Wholesale fabric',
+            owner=self.wholesaler,
+            inventory=50,
+        )
+        self.shop_product = Product.objects.create(
+            name='Shop fabric',
+            owner=self.shopkeeper,
+            inventory=20,
+        )
+
+    def test_catalog_and_product_details_follow_the_supply_chain(self):
+        for owner, title in [
+            (self.industry, 'Factory advertisement'),
+            (self.wholesaler, 'Wholesale advertisement'),
+            (self.shopkeeper, 'Shop advertisement'),
+        ]:
+            SellerBanner.objects.create(
+                owner=owner,
+                title=title,
+                image='seller-banners/test.png',
+                target_url='https://seller.example/',
+            )
+
+        self.client.force_login(self.customer)
+        response = self.client.get(reverse('catalog'))
+        self.assertContains(response, 'Shop fabric')
+        self.assertNotContains(response, 'Wholesale fabric')
+        self.assertNotContains(response, 'Factory fabric')
+        self.assertEqual(
+            list(response.context['banners'].values_list('title', flat=True)),
+            ['Shop advertisement'],
+        )
+        self.assertEqual(
+            self.client.get(reverse('product_detail', args=[self.wholesale_product.slug])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(reverse('product_detail', args=[self.industry_product.slug])).status_code,
+            404,
+        )
+
+        self.client.force_login(self.shopkeeper)
+        response = self.client.get(reverse('catalog'))
+        self.assertContains(response, 'Wholesale fabric')
+        self.assertNotContains(response, 'Shop fabric')
+        self.assertNotContains(response, 'Factory fabric')
+
+        self.client.force_login(self.wholesaler)
+        response = self.client.get(reverse('catalog'))
+        self.assertContains(response, 'Factory fabric')
+        self.assertNotContains(response, 'Wholesale fabric')
+        self.assertNotContains(response, 'Shop fabric')
+
+        self.client.force_login(self.industry)
+        self.assertEqual(
+            self.client.get(reverse('catalog')).context['total_products'],
+            0,
+        )
+
+    def test_product_seller_role_does_not_change_when_owner_switches_active_role(self):
+        self.assertEqual(self.shop_product.seller_role, Product.SellerRole.SHOPKEEPER)
+        self.shopkeeper.role = User.Role.BUYER
+        self.shopkeeper.save(update_fields=['role', 'updated_at'])
+
+        self.shop_product.refresh_from_db()
+
+        self.assertEqual(self.shop_product.seller_role, Product.SellerRole.SHOPKEEPER)
+
+    def test_orders_and_quotes_reject_buyers_at_the_wrong_supply_level(self):
+        self.client.force_login(self.customer)
+        response = self.client.post(
+            reverse('create_order', args=[self.wholesale_product.slug]),
+            {'quantity': '1', 'notes': ''},
+        )
+        self.assertRedirects(response, reverse('buyer_dashboard'))
+        self.assertFalse(Order.objects.exists())
+
+        response = self.client.post(
+            reverse('request_quote', args=[self.industry_product.slug]),
+            {'quantity': '1', 'message': ''},
+        )
+        self.assertRedirects(response, reverse('catalog'))
+        self.assertFalse(QuoteRequest.objects.exists())
+
+        self.client.force_login(self.shopkeeper)
+        response = self.client.post(
+            reverse('create_order', args=[self.wholesale_product.slug]),
+            {'quantity': '2', 'notes': ''},
+        )
+        order = Order.objects.get()
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(order.buyer, self.shopkeeper)
+        self.assertEqual(order.seller, self.wholesaler)
+
+        self.client.force_login(self.wholesaler)
+        response = self.client.post(
+            reverse('create_order', args=[self.industry_product.slug]),
+            {'quantity': '3', 'notes': ''},
+        )
+        order = Order.objects.order_by('-pk').first()
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(order.buyer, self.wholesaler)
+        self.assertEqual(order.seller, self.industry)
+
+    def test_customers_can_explore_shops_and_order_while_closed(self):
+        self.assertFalse(self.shopkeeper.shop_is_open)
+        self.assertContains(self.client.get(reverse('shops')), 'Local Shop')
+        detail = self.client.get(reverse('shop_detail', args=[self.shopkeeper.pk]))
+        self.assertContains(detail, 'Closed now')
+        self.assertContains(detail, 'Shop fabric')
+        self.assertContains(detail, 'Order requests can still be sent')
+
+        self.client.force_login(self.customer)
+        response = self.client.post(
+            reverse('create_order', args=[self.shop_product.slug]),
+            {'quantity': '2', 'notes': 'Please prepare this order.'},
+        )
+        order = Order.objects.get()
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+        self.client.force_login(self.shopkeeper)
+        status_url = reverse('set_shop_status')
+        self.assertEqual(self.client.get(status_url).status_code, 405)
+        self.client.post(status_url, {'status': 'open'})
+        self.shopkeeper.refresh_from_db()
+        self.assertTrue(self.shopkeeper.shop_is_open)
+        self.assertIsNotNone(self.shopkeeper.shop_status_changed_at)
+        self.assertContains(self.client.get(reverse('shops')), 'Open')
+
+    def test_buyer_can_sort_available_shop_products_by_pincode_distance(self):
+        self.customer.pincode = '395001'
+        self.customer.save(update_fields=['pincode'])
+        near_shop = User.objects.create_user(
+            username='near-shop',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            business_name='Nearby Store',
+            pincode='395002',
+        )
+        far_shop = User.objects.create_user(
+            username='far-shop',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            business_name='Far Store',
+            pincode='400001',
+        )
+        for pincode, latitude, longitude in [
+            ('395001', '21.170200', '72.831100'),
+            ('395002', '21.180000', '72.840000'),
+            ('400001', '23.000000', '72.600000'),
+        ]:
+            PincodeLocation.objects.create(
+                pincode=pincode,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        nearby_product = Product.objects.create(
+            name='Nearby cotton',
+            owner=near_shop,
+            inventory=5,
+        )
+        distant_product = Product.objects.create(
+            name='Distant cotton',
+            owner=far_shop,
+            inventory=10,
+        )
+        Product.objects.create(
+            name='Unavailable cotton',
+            owner=near_shop,
+            inventory=0,
+        )
+        Product.objects.create(
+            name='Below-minimum cotton',
+            owner=near_shop,
+            inventory=2,
+            minimum_order=5,
+        )
+        self.client.force_login(self.customer)
+
+        response = self.client.get(
+            reverse('catalog'),
+            {'q': 'cotton', 'sort': 'nearest'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [product.pk for product in response.context['products']],
+            [nearby_product.pk, distant_product.pk],
+        )
+        self.assertLess(
+            response.context['products'][0].distance_km,
+            response.context['products'][1].distance_km,
+        )
+        self.assertContains(response, 'About')
+        self.assertNotContains(response, 'Unavailable cotton')
+        self.assertNotContains(response, 'Below-minimum cotton')
+
+    def test_nearest_sort_explains_when_buyer_has_no_pincode(self):
+        self.client.force_login(self.customer)
+
+        response = self.client.get(reverse('catalog'), {'sort': 'nearest'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Add your six-digit PIN code in Settings')
+        self.assertEqual(response.context['total_products'], 0)
+
+    def test_shopkeeper_order_center_includes_orders_from_suppliers_and_customers(self):
+        Order.objects.create(
+            product=self.wholesale_product,
+            buyer=self.shopkeeper,
+            seller=self.wholesaler,
+            quantity=2,
+        )
+        Order.objects.create(
+            product=self.shop_product,
+            buyer=self.customer,
+            seller=self.shopkeeper,
+            quantity=1,
+        )
+        self.client.force_login(self.shopkeeper)
+
+        response = self.client.get(reverse('my_orders'))
+
+        self.assertContains(response, 'Wholesale fabric')
+        self.assertContains(response, 'Shop fabric')

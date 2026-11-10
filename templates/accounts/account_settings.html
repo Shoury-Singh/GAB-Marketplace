@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row g-4 justify-content-center">
+        <div class="col-lg-9">
+            <header class="mb-4">
+                <p class="text-uppercase text-primary small fw-bold mb-1">Account settings</p>
+                <h1 class="h2 fw-bold">Manage your roles</h1>
+                <p class="text-muted mb-0">
+                    Keep one account, phone number, and login. Add roles here and switch between them without signing out.
+                </p>
+            </header>
+
+            <div class="card dashboard-card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold mb-3">Roles on your account</h2>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for role, label in available_roles %}
+                            <span class="badge rounded-pill {% if role == user.role %}text-bg-primary{% else %}text-bg-secondary{% endif %} px-3 py-2">
+                                {{ label }}{% if role == user.role %} · Active{% endif %}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <section class="card dashboard-card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold">Location for nearby shops</h2>
+                    <p class="text-muted">
+                        Your six-digit PIN code helps sort in-stock shop products by approximate distance.
+                    </p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update-location">
+                        <label for="{{ location_form.pincode.id_for_label }}" class="form-label fw-semibold">
+                            {{ location_form.pincode.label }}
+                        </label>
+                        {{ location_form.pincode }}
+                        {% for error in location_form.pincode.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-outline-primary mt-3">Save PIN code</button>
+                    </form>
+                </div>
+            </section>
+
+            {% if available_roles|length > 1 %}
+                <section class="card dashboard-card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">Switch active role</h2>
+                        <p class="text-muted">Your next page and navigation will match the role you select.</p>
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="switch-role">
+                            <label for="{{ switch_role_form.role.id_for_label }}" class="form-label fw-semibold">
+                                {{ switch_role_form.role.label }}
+                            </label>
+                            {{ switch_role_form.role }}
+                            {% for error in switch_role_form.role.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-gab mt-3">Switch role</button>
+                        </form>
+                    </div>
+                </section>
+            {% endif %}
+
+            {% if has_roles_to_add %}
+                <section class="card dashboard-card border-0 shadow-sm">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">Add another role</h2>
+                        <p class="text-muted">
+                            Add buyer, shopkeeper, wholesaler, or industry access to this same account.
+                        </p>
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add-role">
+                            <div class="mb-3">
+                                <label for="{{ add_role_form.role.id_for_label }}" class="form-label fw-semibold">
+                                    {{ add_role_form.role.label }}
+                                </label>
+                                {{ add_role_form.role }}
+                                {% for error in add_role_form.role.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                <label for="{{ add_role_form.business_name.id_for_label }}" class="form-label fw-semibold">
+                                    {{ add_role_form.business_name.label }}
+                                </label>
+                                {{ add_role_form.business_name }}
+                                <div class="form-text">Required when adding a seller role. Your phone number and login stay the same.</div>
+                                {% for error in add_role_form.business_name.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <button type="submit" class="btn btn-outline-primary">Add role</button>
+                        </form>
+                    </div>
+                </section>
+            {% else %}
+                <div class="alert alert-success mb-0">
+                    Your account already has all available roles.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

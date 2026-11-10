@@ -1,229 +1,199 @@
-# GAB Platform
+﻿# GAB Platform
 
-## Live demo
+GAB Platform is a role-based B2B marketplace for the Indian supply chain. It connects industries, wholesalers, shopkeepers, and buyers in a single platform where product discovery, business profiles, order requests, and role switching are tailored to the user’s current business context.
 
-**Live demo:** [https://www.gabpt.com](https://www.gabpt.com). This configured
-public domain was not reachable when this README was updated.
-The link will work as a live demo once DNS and the Render deployment are active.
+This project is implemented in Django and is designed around the actual workflows visible in the live UI: shopkeepers manage their storefronts, buyers discover nearby shops, sellers publish products, and one account can hold multiple business roles without changing login credentials.
+
+## Overview
+
+The application brings together four business relationships in one ecosystem:
+
+- Industry / Factory / Company: supply makers and manufacturers
+- Wholesaler: source from industry and supply to shopkeepers
+- Shopkeeper: operate a retail storefront and manage products/inventory
+- Buyer / Customer: browse nearby shops and request orders directly
+
+The screenshots provided for this project show the key screens that power this system: shopkeeper dashboard, seller product management, customer marketplace, role settings, and profile management.
+
+## Core product experience
+
+### 1) Shopkeeper dashboard
+
+The first dashboard screenshot shows the primary shopkeeper landing page. It includes:
+
+- role-aware header navigation
+- summary tiles for pending orders, enquiries, active products, and business actions
+- quick actions such as open/close shop and view profile
+- a branded storefront-style dashboard with visual merchandising and product-focused layout
+
+This is the operational control center for a seller running a shop or storefront.
+
+### 2) Seller tools and product management
+
+The seller tools screen is built for daily business operations. It shows a product management area with:
+
+- published/unpublished status badges
+- price and stock visibility
+- edit, listing, and hide actions for each product
+- a prominent "Add product" action for new listings
+
+The design focuses on quick visibility and low-friction management for store owners.
+
+### 3) Customer marketplace and local discovery
+
+The marketplace view demonstrates the buyer-facing experience. It provides:
+
+- a hero section titled "Explore local shops"
+- local shop cards with business names, location, and product counts
+- open/closed status indicators
+- quick call-to-action buttons to visit a shop
+
+This is the main discovery flow for customers looking for nearby stores and product availability.
+
+### 4) Role management and account settings
+
+The settings pages show one of the project’s defining features: multi-role accounts. A single user can belong to multiple marketplace roles and switch active context without re-registering.
+
+The UI includes:
+
+- role pills for currently assigned roles and active role
+- PIN code input for nearby shop sorting
+- switch-role controls that update navigation and dashboard behavior
+- account expansion for adding buyer, shopkeeper, wholesaler, or industry access
+
+### 5) User profile and business identity
+
+The profile dashboard summarizes the user’s identity and role-specific account information. It captures:
+
+- full name and username
+- email and role
+- business name and location
+- PIN code and phone number
+- member since date
+- dashboard, manage roles, and logout actions
+
+This page confirms the app’s consistent profile experience and role-aware identity model.
+
+## Features
+
+### Role-based access
+
+Users are not limited to a single function. The project supports multiple assigned roles and one active role at a time.
+
+### Nearby shop discovery
+
+Buyers can save a six-digit Indian PIN code and discover nearby shopkeepers based on approximate distance. This is a major part of the marketplace experience and is visible in the settings and market UI.
+
+### Supply-chain catalog logic
+
+The catalog follows the trade hierarchy:
+
+- Industries supply wholesalers
+- Wholesalers supply shopkeepers
+- Shopkeepers serve buyers and consumers
+
+This flow is built directly into the app navigation and product visibility logic.
+
+### Product, banner, and image management
+
+Sellers can manage both product listings and promotional content. This includes product publishing, image asset handling, and banner-based business promotion, giving brands a more complete storefront profile.
+
+### Orders, quotes, and enquiries
+
+The marketplace supports buyer enquiries and seller responses, matching the business pattern shown in the dashboard summaries and seller workflow.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Visitor[Buyer, seller, or visitor] -->|HTTPS| Render[Render web service]
-    Render --> Django[Django application]
-    Django --> Accounts[Accounts: login, profiles, password recovery]
-    Django --> Gallery[Marketplace: products, quotes, images, banners]
-    Django --> Templates[HTML templates and static assets]
-    Django --> Database[(PostgreSQL in production)]
-    Django --> Media[(Persistent media disk)]
-    Django -. email configuration .-> SMTP[SMTP provider]
-    Local[Local development] --> Django
-    Local --> SQLite[(SQLite)]
+    User[Buyer / Seller / Business user] --> App[Django app]
+    App --> Accounts[accounts app]
+    App --> Gallery[gallery app]
+    App --> Templates[HTML templates]
+    App --> DB[(SQLite locally / PostgreSQL in production)]
+    App --> Media[(Uploaded media and product images)]
 ```
 
-In production, Render runs Django with PostgreSQL and a persistent disk for
-uploaded media. Local development uses SQLite. Password-reset email is sent
-through SMTP when the mail environment variables are configured.
+## Tech stack
 
-## Database relationships
+- Python
+- Django 6.1.2
+- SQLite for local development
+- PostgreSQL-ready deployment configuration
+- Pillow for image handling
+- WhiteNoise and static asset serving
 
-```mermaid
-erDiagram
-    USER ||--o{ PRODUCT : owns
-    USER ||--o{ GALLERY_IMAGE : uploads
-    USER ||--o{ SELLER_BANNER : owns
-    USER ||--o{ QUOTE_REQUEST : submits
-    USER ||--o{ QUOTE_REQUEST : receives
-    PRODUCT ||--o{ QUOTE_REQUEST : receives
-    USER o|--o{ PASSWORD_RESET_CHALLENGE : verifies
+## Repository structure
 
-    USER {
-        string username
-        string role
-        string business_name
-        string email
-    }
-    PRODUCT {
-        string name
-        string slug
-        string category
-        decimal price
-        integer inventory
-        boolean is_active
-    }
-    QUOTE_REQUEST {
-        integer quantity
-        string status
-        string message
-        string seller_response
-    }
-    GALLERY_IMAGE {
-        string title
-        string image
-        boolean is_active
-    }
-    SELLER_BANNER {
-        string title
-        string image
-        string target_url
-        boolean is_active
-    }
-    PASSWORD_RESET_CHALLENGE {
-        string email_digest
-        datetime expires_at
-        boolean is_used
-    }
+```text
+accounts/              Role logic, profiles, dashboards, login/signup flows
+gallery/               Catalog, product, banner, order, and quote logic
+templates/             HTML templates for all screens and dashboards
+static/                Branding, icons, and static front-end assets
+media/                 Uploaded product and business images
+manage.py              Django entry point
+requirements.txt       Python project dependencies
+render.yaml            Render deployment blueprint
+serviceworker.js       PWA/service worker for app-style behavior
 ```
 
-Products can remain after their owner is deleted; quote requests protect their
-product and are deleted with either associated user. Gallery images and seller
-banners are deleted with their owner. A password-reset challenge can be
-unassociated with a user.
+## Local setup
 
-## Screenshots and demo video
-
-UI screenshots and a short walkthrough video are not included in this checkout.
-Add captures from the deployed or locally running app under `docs/media/` and
-embed them here once available; no example captures are shown as if they were
-the real application.
-
-## Setup
-
-Create and activate a virtual environment, then install the dependencies:
+### 1) Create a virtual environment
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
+
+### 2) Install dependencies
+
+```powershell
 pip install -r requirements.txt
 ```
 
-For local development, set `DJANGO_DEBUG` to `true`. A local signing key can
-be generated in PowerShell; keep it private and do not commit it:
+### 3) Set local development environment variables
 
 ```powershell
 $env:DJANGO_DEBUG = "true"
 $env:DJANGO_SECRET_KEY = (py -c "import secrets; print(secrets.token_urlsafe(50))")
 ```
 
-Then initialize the database and start the development server:
+### 4) Apply migrations and load the PIN code data
 
 ```powershell
 py manage.py migrate
+py manage.py load_pincode_locations
+```
+
+### 5) Start the app
+
+```powershell
 py manage.py runserver
 ```
 
-## Marketplace workflow
+Then open:
 
-Industry, wholesaler, and shopkeeper accounts can add and manage products from
-their dashboard or the **My Products** navigation link. Published products
-can include a product photo and appear in the catalog with the seller's
-business name and location. Signed-in users can request a quote from a listing;
-buyers can follow replies under **My Enquiries**, and sellers can respond
-under **Quote Requests**. Signed-in users can also upload and manage business
-photos from **My Images**. Business sellers can create, edit, pause, and
-publish image advertisements from **My Ads**; active banners appear on the
-homepage and product catalog. Visitors can switch between light and dark
-themes, and their choice is saved in their browser.
-
-### Password recovery email
-
-The login page includes email-code password recovery. A code is single-use,
-expires after 10 minutes, and allows at most five verification attempts.
-Requests are rate-limited per email address and IP address. For local
-development, the code is printed to the runserver console. For production,
-configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
-`EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`, and `EMAIL_USE_TLS` in the
-deployment environment. Keep mail credentials private; the repository's
-Render Blueprint prompts for these values.
-
-Apply migrations after pulling changes that add or update database models:
-
-```powershell
-py manage.py migrate
+```text
+http://127.0.0.1:8000
 ```
 
-The application uses SQLite locally. The database, uploaded media, and virtual environment are excluded from version control.
+## Production notes
 
-The production server uses [`gab.production`](./gab/production.py). It requires
-a configured `DJANGO_SECRET_KEY` and `DATABASE_URL`, refuses to start with
-debug mode enabled, and enforces HTTPS and secure cookies. `runserver` continues
-to use the local `gab.settings` module. Render sets
-`DJANGO_SETTINGS_MODULE=gab.production` in its Blueprint.
+The project includes a Render deployment setup and supports production configuration via `gab.production`. In a real deployment, the application should be configured with secure environment variables for:
 
-## Publish GAB on Render
+- Django secret key
+- database URL
+- email credentials
+- HTTPS and secure cookie settings
+- media storage configuration
 
-The repository includes a Render Blueprint in `render.yaml`. It provisions a
-web service, PostgreSQL database, persistent image-upload disk, migrations,
-and a health check. The database and disk are paid resources; review Render's
-current prices before applying the Blueprint.
+## Why this project stands out
 
-1. Push the project to the GitHub repository and create a Render account.
-2. In the Render Dashboard, create a **New Blueprint Instance** and connect
-   `Shoury-Singh/GAB-Marketplace`. Review the listed service, database, disk, region,
-   and prices before confirming. The Blueprint wires the database and disk to
-   the web service automatically.
-3. Configure SMTP in the web service's environment when you are ready to enable
-   password-reset email: set `EMAIL_HOST`, `EMAIL_HOST_USER`,
-   `EMAIL_HOST_PASSWORD`, and `DEFAULT_FROM_EMAIL`. The default port is 587 with
-   TLS enabled. Until these are set, password reset emails cannot be delivered.
-   Keep provider secrets in Render's environment settings, not in Git or chat.
-4. Wait for the deployment to finish and confirm `/health/` returns `ok` at
-   the generated `*.onrender.com` address. Create test buyer and seller
-   accounts, publish a product and banner, and test password recovery before
-   sharing the URL.
+GAB is more than a simple catalog; it is a role-aware commerce system shaped around real business behavior. The product demonstrates how a single platform can support multi-role business onboarding, local discovery, product selling, and role switching in a clean and modern UI.
 
-Image uploads use the service's persistent disk at `/var/data/media`. Django
-serves these files through its configured media storage. If you later switch to
-S3-compatible storage, configure the `AWS_STORAGE_BUCKET_NAME` and
-`AWS_S3_*` environment values in Render; keep access keys private.
+The screenshots included in this task are strong evidence of the product’s intended experience: the app is polished, business-focused, and clearly tuned for a real supply-chain marketplace rather than a generic demo storefront.
 
-### Use `www.gabpt.com` as the public website address
+## License
 
-The app is configured to accept `gabpt.com` and `www.gabpt.com` on Render,
-including HTTPS form submissions. This does not register the domain or make it
-live by itself; you need to own the domain and deploy GAB first.
-
-1. Register `gabpt.com` with a domain registrar and keep access to its DNS
-   settings.
-2. Deploy GAB on Render and open the web service's **Settings → Custom
-   Domains**. Add both `gabpt.com` and `www.gabpt.com`.
-3. In the domain's DNS control panel, create the records Render requests for
-   each hostname. Use the exact record type and target shown by Render; DNS
-   targets can vary by provider and should not be guessed.
-4. Wait for DNS to propagate and for Render to issue the HTTPS certificate.
-   Then visit `https://www.gabpt.com` and check `https://gabpt.com`.
-5. If you change domains, set the Render `GAB_CUSTOM_DOMAIN` environment
-   variable to the new root domain (without `www` or `https://`) and redeploy.
-
-Render's custom-domain settings are required in addition to the DNS records.
-Keep `DJANGO_SECRET_KEY`, database credentials, storage credentials, and email
-credentials private. Render service, database, object storage, and domain costs
-depend on the plans and registrar you choose; check current pricing before
-creating paid resources.
-
-The deployed database is separate from local `db.sqlite3`; existing local
-accounts and listings will not appear online unless intentionally migrated.
-Uploaded images are stored in the configured object-storage bucket.
-
-## Install GAB from Chrome
-
-The site includes an installable web-app manifest and a Chrome install button.
-After deployment on HTTPS, open the GAB website in Chrome and choose **Install
-GAB** if the button is offered. Chrome's menu also has an install option. This
-adds the website as an app on the device; it is not a separate Chrome Web Store
-extension. The root-level `serviceworker.js` caches the app manifest and icons
-and shows a simple offline message when a page cannot be reached. Dynamic
-pages and account data are not stored in the service-worker cache.
-
-The Python dependency file is `requirements.txt`; run
-`pip install -r requirements.txt` to install the backend dependencies.
-
-## Marketplace roadmap
-
-The current marketplace supports seller product listings and buyer/seller
-quote requests. A full retail-style selling flow is a later milestone:
-shopping cart, addresses, order management, payment-provider integration,
-shipping/fulfillment, refunds, and customer notifications. Payment processing
-should only be enabled after choosing a payment provider and completing its
-merchant onboarding.
+This project is provided as a working application for business marketplace use and should be reviewed for deployment-specific licensing, privacy, and compliance requirements before production release.

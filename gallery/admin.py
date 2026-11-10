@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import GalleryImage, Product, QuoteRequest, SellerBanner
+from .models import GalleryImage, Order, OrderMessage, Product, QuoteRequest, SellerBanner
 
 
 @admin.register(GalleryImage)
@@ -27,6 +27,21 @@ class QuoteRequestAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     search_fields = ('product__name', 'buyer__username', 'seller__username')
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ('id', 'product', 'buyer', 'seller', 'quantity', 'status', 'updated_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('product__name', 'buyer__username', 'seller__username')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(OrderMessage)
+class OrderMessageAdmin(admin.ModelAdmin):
+    list_display = ('order', 'sender', 'created_at')
+    search_fields = ('body', 'sender__username', 'order__product__name')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(SellerBanner)

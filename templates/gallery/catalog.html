@@ -267,9 +267,27 @@
 <div class="container catalog-shell">
     {% include 'gallery/_seller_banners.html' %}
     <section class="catalog-hero">
-        <div class="catalog-kicker">B2B marketplace</div>
-        <h1>Find verified products for every business need.</h1>
-        <p>Source factory-ready inventory, trusted supplies, and high-volume deals from reliable sellers across India.</p>
+        {% if user.is_buyer %}
+        <div class="catalog-kicker">Customer marketplace</div>
+        <h1>Find products from neighborhood shops.</h1>
+        <p>Explore shopkeeper listings and send order requests. Shops can reply when they reopen.</p>
+        <p class="small mb-0 mt-2">Nearest distances are approximate and based on PIN-code area centers.</p>
+        {% elif user.is_shopkeeper %}
+        <div class="catalog-kicker">Shopkeeper supply catalog</div>
+        <h1>Restock your shop from wholesalers.</h1>
+        <p>Browse wholesale products and place orders directly with suppliers.</p>
+        {% elif user.is_wholesaler %}
+        <div class="catalog-kicker">Wholesale supply catalog</div>
+        <h1>Source products directly from industry.</h1>
+        <p>Browse industry listings and place orders directly with manufacturers.</p>
+        {% else %}
+        <div class="catalog-kicker">GAB supply chain</div>
+        <h1>Manage your products and business.</h1>
+        <p>Products are shown to the next business level in the supply chain.</p>
+        {% endif %}
+        {% if user.is_buyer %}
+        <a href="{% url 'shops' %}" class="btn btn-outline-light mt-3">Explore all shops</a>
+        {% endif %}
         <div class="catalog-stats">
             <div class="catalog-stat">
                 <strong>{{ total_products }}</strong>
@@ -330,6 +348,9 @@
                         <option value="rating" {% if sort == 'rating' %}selected{% endif %}>Top rated</option>
                         <option value="price_low" {% if sort == 'price_low' %}selected{% endif %}>Price: Low to high</option>
                         <option value="price_high" {% if sort == 'price_high' %}selected{% endif %}>Price: High to low</option>
+                        {% if user.is_buyer %}
+                        <option value="nearest" {% if sort == 'nearest' %}selected{% endif %}>Nearest shops (in stock)</option>
+                        {% endif %}
                     </select>
                     {% if selected_category != 'all' %}
                     <input type="hidden" name="category" value="{{ selected_category }}">
@@ -337,6 +358,10 @@
                     <button type="submit" class="btn btn-primary">Apply</button>
                 </form>
             </div>
+
+            {% if location_message %}
+            <div class="alert alert-info" role="status">{{ location_message }}</div>
+            {% endif %}
 
             <div class="product-grid">
                 {% for product in products %}
@@ -359,7 +384,19 @@
                             <div class="product-meta">No reviews yet</div>
                         {% endif %}
                         <div class="product-meta">{{ product.supplier }} · {{ product.location }}</div>
-                        {% if product.owner %}<div class="small text-success mb-2">Listed by {{ product.owner.business_name|default:product.owner.username }}</div>{% endif %}
+                        {% if product.owner %}
+                            <div class="small text-success mb-2">
+                                {% if product.seller_role == 'SHOPKEEPER' %}
+                                Store:
+                                {% else %}
+                                Listed by
+                                {% endif %}
+                                {{ product.owner.business_name|default:product.owner.username }}
+                            </div>
+                        {% endif %}
+                        {% if product.distance_km != None %}
+                            <div class="small text-primary mb-2">About {{ product.distance_km }} km away</div>
+                        {% endif %}
 
                         <div class="price-row">
                             <strong>₹{{ product.price }}</strong>

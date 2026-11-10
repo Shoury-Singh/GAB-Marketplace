@@ -318,6 +318,34 @@
             font-size: 0.72rem;
             opacity: 0.85;
         }
+        .order-chat-shortcut {
+            position: fixed;
+            right: 1.25rem;
+            bottom: 1.25rem;
+            z-index: 1040;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.85rem 1.15rem;
+            border-radius: 999px;
+            background: #00d4aa;
+            color: #0a2540;
+            box-shadow: 0 8px 24px rgba(10, 37, 64, 0.25);
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .order-chat-shortcut:hover {
+            background: #00e6b8;
+            color: #0a2540;
+            transform: translateY(-2px);
+        }
+        @media (max-width: 575.98px) {
+            .order-chat-shortcut {
+                right: 1rem;
+                bottom: 1rem;
+                padding: 0.8rem 1rem;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -366,6 +394,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{% url 'shops' %}">
+                            <i class="bi bi-shop me-1"></i> Shops
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{% url 'images_show' %}">
                             <i class="bi bi-images me-1"></i> Gallery
                         </a>
@@ -385,6 +418,13 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'seller_quotes' %}">Quote Requests</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'my_orders' %}">My Orders</a>
+                            </li>
+                        {% elif user.is_buyer %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'my_orders' %}">My Orders</a>
+                            </li>
                         {% endif %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'buyer_quotes' %}">My Enquiries</a>
@@ -395,6 +435,9 @@
                                 {{ user.username }}
                                 <span class="badge bg-info role-badge ms-1">{{ user.get_role_display }}</span>
                             </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'account_settings' %}">Settings</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'profile' %}">Profile</a>
@@ -459,6 +502,7 @@
                     <h6>Platform</h6>
                     <ul class="list-unstyled">
                         <li class="mb-2"><a href="{% url 'catalog' %}">Product Catalog</a></li>
+                        <li class="mb-2"><a href="{% url 'shops' %}">Explore Shops</a></li>
                         <li class="mb-2"><a href="{% url 'images_show' %}">Image Gallery</a></li>
                         <li class="mb-2"><a href="{% url 'register' %}">Join Network</a></li>
                         <li class="mb-2"><a href="{% url 'login' %}">Login</a></li>
@@ -484,6 +528,15 @@
             </div>
         </div>
     </footer>
+
+    {% if user.is_authenticated %}
+        {% if user.is_buyer or user.is_industry or user.is_wholesaler or user.is_shopkeeper %}
+            <a class="order-chat-shortcut" href="{% url 'my_orders' %}">
+                <i class="bi bi-chat-dots-fill" aria-hidden="true"></i>
+                <span>Orders &amp; chat</span>
+            </a>
+        {% endif %}
+    {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>

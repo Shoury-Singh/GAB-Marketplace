@@ -19,6 +19,7 @@ def home_view(request):
         'banners': SellerBanner.objects.filter(
             is_active=True,
             owner__is_active=True,
+            seller_role='SHOPKEEPER',
         ).select_related('owner')[:4],
     })
 

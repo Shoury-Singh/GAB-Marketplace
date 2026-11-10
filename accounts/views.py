@@ -18,13 +18,16 @@ from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from .forms import (
+    AccountLocationForm,
+    AddAccountRoleForm,
     PasswordResetRequestForm,
     PasswordResetVerifyForm,
+    SwitchAccountRoleForm,
     UserRegistrationForm,
     UserLoginForm,
 )
-from .models import PasswordResetChallenge, User
-from gallery.models import Product, QuoteRequest, SellerBanner
+from .models import PasswordResetChallenge, User, UserRole
+from gallery.models import Order, Product, QuoteRequest, SellerBanner
 
 
 logger = logging.getLogger(__name__)
@@ -288,6 +291,68 @@ def profile_view(request):
 
 
 @login_required
+def account_settings_view(request):
+    add_role_form = AddAccountRoleForm(user=request.user)
+    switch_role_form = SwitchAccountRoleForm(user=request.user)
+    location_form = AccountLocationForm(instance=request.user)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'update-location':
+            location_form = AccountLocationForm(request.POST, instance=request.user)
+            if location_form.is_valid():
+                location_form.save()
+                messages.success(request, 'Your PIN code was updated.')
+                return redirect('account_settings')
+        elif action == 'add-role':
+            add_role_form = AddAccountRoleForm(request.POST, user=request.user)
+            if add_role_form.is_valid():
+                role = add_role_form.cleaned_data['role']
+                _assignment, created = UserRole.objects.get_or_create(
+                    user=request.user,
+                    role=role,
+                )
+                if created:
+                    business_name = add_role_form.cleaned_data['business_name'].strip()
+                    if business_name and not request.user.business_name:
+                        request.user.business_name = business_name
+                        request.user.save(update_fields=['business_name', 'updated_at'])
+                    messages.success(
+                        request,
+                        f'{dict(User.Role.choices)[role]} was added to your account.',
+                    )
+                else:
+                    messages.info(request, 'That role is already on your account.')
+                return redirect('account_settings')
+        elif action == 'switch-role':
+            switch_role_form = SwitchAccountRoleForm(request.POST, user=request.user)
+            if switch_role_form.is_valid():
+                request.user.role = switch_role_form.cleaned_data['role']
+                request.user.save(update_fields=['role', 'updated_at'])
+                messages.success(
+                    request,
+                    f'Switched to {request.user.get_role_display()}.',
+                )
+                return redirect(request.user.get_dashboard_url())
+        else:
+            messages.error(request, 'Choose a valid account settings action.')
+
+    available_roles = request.user.get_available_roles()
+    role_labels = dict(User.Role.choices)
+    return render(request, 'accounts/account_settings.html', {
+        'add_role_form': add_role_form,
+        'switch_role_form': switch_role_form,
+        'location_form': location_form,
+        'available_roles': [
+            (role, role_labels[role])
+            for role in available_roles
+        ],
+        'has_roles_to_add': len(available_roles) < len(User.Role.choices),
+        'page_title': 'Account Settings - GAB',
+    })
+
+
+@login_required
 def industry_dashboard(request):
     if not request.user.is_industry:
         messages.warning(request, "Access denied. This dashboard is only for Industry users.")
@@ -314,6 +379,10 @@ def wholesaler_dashboard(request):
     return render(request, 'accounts/dashboards/wholesaler.html', {
         'page_title': 'Wholesaler Dashboard - GAB',
         'active_products': Product.objects.filter(owner=request.user, is_active=True).count(),
+        'incoming_orders': Order.objects.filter(
+            seller=request.user,
+            status=Order.Status.PENDING,
+        ).count(),
         'incoming_quotes': QuoteRequest.objects.filter(
             seller=request.user,
             status=QuoteRequest.Status.PENDING,
@@ -333,6 +402,10 @@ def shopkeeper_dashboard(request):
     return render(request, 'accounts/dashboards/shopkeeper.html', {
         'page_title': 'Shopkeeper Dashboard - GAB',
         'active_products': Product.objects.filter(owner=request.user, is_active=True).count(),
+        'incoming_orders': Order.objects.filter(
+            seller=request.user,
+            status=Order.Status.PENDING,
+        ).count(),
         'incoming_quotes': QuoteRequest.objects.filter(
             seller=request.user,
             status=QuoteRequest.Status.PENDING,

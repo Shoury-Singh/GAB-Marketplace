@@ -45,6 +45,11 @@ class GalleryImage(models.Model):
 
 
 class Product(models.Model):
+    class SellerRole(models.TextChoices):
+        INDUSTRY = 'INDUSTRY', _('Industry / Factory / Company')
+        WHOLESALER = 'WHOLESALER', _('Wholesaler')
+        SHOPKEEPER = 'SHOPKEEPER', _('Shopkeeper')
+
     class Category(models.TextChoices):
         FABRICS = 'Fabrics', _('Fabrics')
         MACHINERY = 'Machinery', _('Machinery')
@@ -61,6 +66,13 @@ class Product(models.Model):
         related_name='products',
         null=True,
         blank=True,
+    )
+    seller_role = models.CharField(
+        max_length=20,
+        choices=SellerRole.choices,
+        blank=True,
+        null=True,
+        editable=False,
     )
     image = models.ImageField(upload_to='products/%Y/%m/', blank=True)
     category = models.CharField(max_length=30, choices=Category.choices, default=Category.FABRICS)
@@ -88,6 +100,8 @@ class Product(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        if not self.seller_role and self.owner_id:
+            self.seller_role = self.owner.role
         if not self.slug:
             self.slug = slugify(self.name)
             base_slug = self.slug
@@ -151,11 +165,81 @@ class QuoteRequest(models.Model):
         return f'Quote request for {self.product} from {self.buyer}'
 
 
+class Order(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', _('Pending')
+        ACCEPTED = 'ACCEPTED', _('Accepted')
+        PROCESSING = 'PROCESSING', _('Processing')
+        SHIPPED = 'SHIPPED', _('Shipped')
+        DELIVERED = 'DELIVERED', _('Delivered')
+        DECLINED = 'DECLINED', _('Declined')
+        CANCELLED = 'CANCELLED', _('Cancelled')
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name='orders',
+    )
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='buyer_orders',
+    )
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='seller_orders',
+    )
+    quantity = models.PositiveIntegerField()
+    notes = models.TextField(max_length=1000, blank=True)
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-created_at']
+
+    def __str__(self):
+        return f'Order #{self.pk} for {self.product} from {self.buyer}'
+
+
+class OrderMessage(models.Model):
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='order_messages',
+    )
+    body = models.CharField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+
+    def __str__(self):
+        return f'Message on order #{self.order_id} from {self.sender}'
+
+
 class SellerBanner(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='seller_banners',
+    )
+    seller_role = models.CharField(
+        max_length=20,
+        choices=Product.SellerRole.choices,
+        blank=True,
+        null=True,
+        editable=False,
     )
     title = models.CharField(max_length=120)
     image = models.ImageField(upload_to='seller-banners/%Y/%m/')
@@ -171,6 +255,11 @@ class SellerBanner(models.Model):
 
     def __str__(self):
         return f'{self.title} by {self.owner}'
+
+    def save(self, *args, **kwargs):
+        if not self.seller_role and self.owner_id:
+            self.seller_role = self.owner.role
+        super().save(*args, **kwargs)
 
 
 def get_random_image_upload_path(instance, filename):

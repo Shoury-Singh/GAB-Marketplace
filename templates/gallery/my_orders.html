@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <p class="text-uppercase text-primary small fw-bold mb-1">Order center</p>
+            <h1 class="h2 fw-bold mb-0">{{ heading }}</h1>
+        </div>
+        {% if user.is_buyer or user.is_shopkeeper or user.is_wholesaler %}
+            <a href="{% url 'catalog' %}" class="btn btn-gab">
+                <i class="bi bi-bag-plus me-1" aria-hidden="true"></i>Browse products
+            </a>
+        {% endif %}
+    </div>
+
+    {% if orders %}
+        <div class="d-grid gap-3">
+            {% for order in orders %}
+                <article class="card dashboard-card p-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                        <div>
+                            <h2 class="h5 fw-bold mb-1">
+                                <a href="{% url 'order_detail' order.pk %}" class="text-decoration-none">{{ order.product.name }}</a>
+                            </h2>
+                            <div class="text-muted small">Order #{{ order.pk }} · {{ order.created_at|date:"M j, Y" }}</div>
+                        </div>
+                        <span class="badge text-bg-primary">{{ order.get_status_display }}</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 mt-3 text-muted small">
+                        <span><i class="bi bi-box-seam me-1" aria-hidden="true"></i>{{ order.quantity }} units</span>
+                        {% if order.buyer_id == user.id %}
+                            <span><i class="bi bi-shop me-1" aria-hidden="true"></i>{{ order.seller.business_name|default:order.seller.username }}</span>
+                        {% else %}
+                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Buyer: {{ order.buyer.business_name|default:order.buyer.username }}</span>
+                        {% endif %}
+                        <span><i class="bi bi-chat me-1" aria-hidden="true"></i>{{ order.message_count }} messages</span>
+                    </div>
+                    {% if order.notes %}
+                        <p class="mt-3 mb-0">{{ order.notes|truncatechars:180 }}</p>
+                    {% endif %}
+                    <div class="mt-3">
+                        <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline-primary">
+                            <i class="bi bi-chat-dots me-1" aria-hidden="true"></i>Open order &amp; chat
+                        </a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card dashboard-card text-center p-5">
+            <div class="display-6 text-primary mb-3"><i class="bi bi-bag" aria-hidden="true"></i></div>
+            <h2 class="h4">No orders yet</h2>
+            {% if user.is_buyer or user.is_shopkeeper or user.is_wholesaler %}
+                <p class="text-muted">Browse products from your suppliers or wait for new orders from your customers.</p>
+                <a href="{% url 'catalog' %}" class="btn btn-gab align-self-center">Explore the catalog</a>
+            {% else %}
+                <p class="text-muted mb-0">New buyer order requests will appear here.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

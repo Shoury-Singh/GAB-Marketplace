@@ -189,7 +189,10 @@
                     {% endif %}
                     <div class="detail-meta">
                         {{ product.supplier }} · {{ product.location }}
-                        {% if product.owner %} · {{ product.owner.get_role_display }}{% endif %}
+                        {% if product.owner %} · {{ product.seller_role|title }}{% endif %}
+                        {% if product.seller_role == 'SHOPKEEPER' and product.owner %}
+                            · <a href="{% url 'shop_detail' product.owner.pk %}">Visit shop</a>
+                        {% endif %}
                     </div>
 
                     <div class="detail-price">
@@ -203,8 +206,15 @@
                         {% if product.owner %}
                             {% if user.is_authenticated and product.owner_id == user.id %}
                                 <a href="{% url 'edit_product' product.pk %}" class="btn btn-primary btn-lg">Manage your listing</a>
-                            {% else %}
+                            {% elif can_contact_seller %}
                                 <a href="{% url 'request_quote' product.slug %}" class="btn btn-primary btn-lg">Request Quote</a>
+                                {% if user.is_authenticated %}
+                                    <a href="{% url 'create_order' product.slug %}" class="btn btn-success btn-lg">
+                                        <i class="bi bi-chat-dots me-1" aria-hidden="true"></i>Place Order &amp; Chat
+                                    </a>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Switch to the eligible buyer role to contact this seller.</span>
                             {% endif %}
                         {% else %}
                             <span class="btn btn-outline-secondary btn-lg disabled">Seller unavailable</span>
