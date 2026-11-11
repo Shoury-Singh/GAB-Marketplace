@@ -219,3 +219,45 @@ The screenshots included in this task are strong evidence of the product’s int
 ## License
 
 This project is provided as a working application for business marketplace use and should be reviewed for deployment-specific licensing, privacy, and compliance requirements before production release.
+
+
+## Payments and transaction records
+
+Order fulfilment status and payment status are separate. A seller can report
+bank transfer, business credit, cash, or external UPI payment against an
+accepted order. GAB records the method, optional reference, reporting user,
+and timestamp, and labels it seller-reported rather than independently verified.
+
+PaymentAttempt amounts are stored as integer paise. CommissionLedger snapshots
+the seller's commission plan when payment is recorded. The early-adopter plan
+starts at 100 basis points (1%); GST remains unconfigured until GAB's CA confirms
+the applicable rate and invoice treatment.
+
+Prepare draft monthly commission statements with:
+
+    python manage.py generate_commission_statements
+    python manage.py generate_commission_statements --month 2026-10
+
+Payout profile references and onboarding status are managed in Django Admin.
+GAB does not store bank account numbers or KYC documents. Hosted checkout and
+provider webhook adapters remain disabled until GAB selects a provider, obtains
+written marketplace-flow approval, and configures sandbox credentials. A
+provider adapter must verify the original webhook body, deduplicate event IDs,
+check order amount and currency, and call record_verified_provider_capture.
+Browser redirects must never mark an order paid.
+
+
+### Razorpay Route sandbox switch
+
+The Razorpay Route adapter stays off unless all of these server environment
+values are configured: GAB_PAYMENT_PROVIDER=razorpay_route,
+GAB_RAZORPAY_ROUTE_APPROVED=true, GAB_RAZORPAY_KEY_ID,
+GAB_RAZORPAY_KEY_SECRET, and GAB_RAZORPAY_WEBHOOK_SECRET. Set the approval
+switch only after the provider and GAB's adviser approve the exact marketplace
+fund flow. Each seller also needs an active Route linked account, and the
+commission plan needs a CA-confirmed GST rate before checkout can start.
+
+Configure Razorpay to send payment.captured and payment.failed events to
+/images/payments/webhooks/razorpay-route/. Only the signed provider webhook
+changes an online order to paid. Browser checkout results only display a
+pending-confirmation message.

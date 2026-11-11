@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import GalleryImage, Order, Product, QuoteRequest, SellerBanner
+from .models import GalleryImage, Order, PaymentAttempt, Product, QuoteRequest, SellerBanner
 
 
 class GalleryImageForm(forms.ModelForm):
@@ -104,9 +104,22 @@ class QuoteRequestForm(forms.ModelForm):
 
 
 class QuoteResponseForm(forms.ModelForm):
+    quoted_unit_price = forms.DecimalField(
+        required=False,
+        min_value=Decimal('0.01'),
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': '0.01',
+            'step': '0.01',
+            'placeholder': 'Price per unit (₹)',
+        }),
+    )
+
     class Meta:
         model = QuoteRequest
-        fields = ['status', 'seller_response']
+        fields = ['status', 'quoted_unit_price', 'seller_response']
         widgets = {
             'status': forms.Select(attrs={'class': 'form-select'}),
             'seller_response': forms.Textarea(attrs={
@@ -122,6 +135,15 @@ class QuoteResponseForm(forms.ModelForm):
             (QuoteRequest.Status.QUOTED, 'Quoted'),
             (QuoteRequest.Status.DECLINED, 'Declined'),
         ]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get('status') == QuoteRequest.Status.QUOTED
+            and cleaned_data.get('quoted_unit_price') is None
+        ):
+            self.add_error('quoted_unit_price', 'Enter the price per unit for this quote.')
+        return cleaned_data
 
 
 class OrderCreateForm(forms.Form):
@@ -202,3 +224,21 @@ class SellerBannerForm(forms.ModelForm):
         if not target_url.startswith(('https://', 'http://')):
             raise forms.ValidationError('Use a web link beginning with http:// or https://.')
         return target_url
+
+
+
+class OfflinePaymentForm(forms.Form):
+    method = forms.ChoiceField(
+        choices=PaymentAttempt.OfflineMethod.choices,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label='How did the buyer pay?',
+    )
+    reference = forms.CharField(
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Bank reference, invoice reference, or short note',
+        }),
+        label='Payment reference',
+    )

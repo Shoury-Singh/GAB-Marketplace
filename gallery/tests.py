@@ -1,4 +1,5 @@
 from io import BytesIO
+from decimal import Decimal
 import tempfile
 
 from django.contrib.auth import get_user_model
@@ -113,6 +114,74 @@ class MarketplaceFlowTests(TestCase):
             product.image.url,
         )
 
+    def test_seller_catalog_shows_product_history_and_ordered_demand(self):
+        second_buyer = User.objects.create_user(
+            username='second-buyer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        past_product = Product.objects.create(
+            owner=self.seller,
+            name='Past Packaging',
+            category=Product.Category.PACKAGING,
+            is_active=False,
+        )
+        Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=5,
+            status=Order.Status.ACCEPTED,
+        )
+        Order.objects.create(
+            product=self.product,
+            buyer=second_buyer,
+            seller=self.seller,
+            quantity=3,
+            status=Order.Status.DELIVERED,
+        )
+        Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=100,
+            status=Order.Status.PENDING,
+        )
+        Order.objects.create(
+            product=past_product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=4,
+            status=Order.Status.ACCEPTED,
+        )
+
+        self.client.force_login(self.seller)
+        response = self.client.get(reverse('my_products'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Past Packaging')
+        self.assertContains(response, 'Hidden')
+        self.assertEqual(response.context['buyer_count'], 2)
+        self.assertEqual(response.context['units_sold'], 12)
+        products = {
+            product.pk: product
+            for product in response.context['products']
+        }
+        self.assertEqual(products[self.product.pk].buyer_count, 2)
+        self.assertEqual(products[self.product.pk].order_count, 2)
+        self.assertEqual(products[self.product.pk].units_sold, 8)
+        self.assertEqual(products[past_product.pk].units_sold, 4)
+        self.assertEqual(
+            {
+                item['category']: item['units_sold']
+                for item in response.context['demand_categories']
+            },
+            {
+                Product.Category.FABRICS: 8,
+                Product.Category.PACKAGING: 4,
+            },
+        )
+
     def test_uploaded_media_is_served_as_an_image_and_rejects_other_paths(self):
         image_buffer = BytesIO()
         Image.new('RGB', (12, 12), color='red').save(image_buffer, format='PNG')
@@ -167,15 +236,110 @@ class MarketplaceFlowTests(TestCase):
         )
         response = self.client.post(
             reverse('respond_to_quote', args=[quote.pk]),
-            {'status': QuoteRequest.Status.QUOTED, 'seller_response': '₹225 per unit.'},
+            {
+                'status': QuoteRequest.Status.QUOTED,
+                'quoted_unit_price': '225.00',
+                'seller_response': '₹225 per unit.',
+            },
         )
         self.assertRedirects(response, reverse('seller_quotes'))
         quote.refresh_from_db()
         self.assertEqual(quote.status, QuoteRequest.Status.QUOTED)
         self.assertEqual(quote.seller_response, '₹225 per unit.')
+        self.assertEqual(quote.quoted_unit_price, Decimal('225.00'))
 
         self.client.force_login(self.buyer)
         self.assertContains(self.client.get(reverse('buyer_quotes')), '₹225 per unit.')
+
+    def test_seller_cannot_send_a_quote_without_a_unit_price(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+        )
+        self.client.force_login(self.seller)
+
+        response = self.client.post(
+            reverse('respond_to_quote', args=[quote.pk]),
+            {'status': QuoteRequest.Status.QUOTED, 'seller_response': 'Bulk price'},
+        )
+
+        self.assertRedirects(response, reverse('seller_quotes'))
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, QuoteRequest.Status.PENDING)
+        self.assertIsNone(quote.quoted_unit_price)
+
+    def test_buyer_accepting_quote_creates_a_price_locked_order_once(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+            status=QuoteRequest.Status.QUOTED,
+            quoted_unit_price=Decimal('225.00'),
+        )
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(reverse('accept_quote', args=[quote.pk]))
+
+        order = Order.objects.get(source_quote=quote)
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(order.unit_price, Decimal('225.00'))
+        self.assertEqual(order.total_amount, Decimal('1800.00'))
+        self.assertEqual(order.product_name, 'Cotton Fabric')
+        self.assertTrue(order.product_snapshot['captured_at'])
+        self.assertEqual(quote.converted_order, order)
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, QuoteRequest.Status.ACCEPTED)
+        self.assertContains(
+            self.client.get(reverse('buyer_quotes')),
+            reverse('order_detail', args=[order.pk]),
+        )
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.inventory, 100)
+
+        buyer_order_page = self.client.get(reverse('order_detail', args=[order.pk]))
+        self.assertIsNone(buyer_order_page.context['status_form'])
+        self.assertContains(buyer_order_page, 'The supplier manages this order’s status.')
+
+        self.product.name = 'Renamed listing'
+        self.product.price = Decimal('300.00')
+        self.product.save(update_fields=['name', 'price', 'updated_at'])
+        order.refresh_from_db()
+        self.assertEqual(order.product_name, 'Cotton Fabric')
+        self.assertEqual(order.unit_price, Decimal('225.00'))
+        self.assertEqual(order.total_amount, Decimal('1800.00'))
+
+        response = self.client.post(reverse('accept_quote', args=[quote.pk]))
+
+        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertEqual(Order.objects.filter(source_quote=quote).count(), 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.inventory, 100)
+
+    def test_quote_acceptance_rechecks_stock_and_keeps_quote_open_if_unavailable(self):
+        quote = QuoteRequest.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+            status=QuoteRequest.Status.QUOTED,
+            quoted_unit_price=Decimal('225.00'),
+        )
+        self.product.inventory = 5
+        self.product.save(update_fields=['inventory', 'updated_at'])
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(reverse('accept_quote', args=[quote.pk]))
+
+        self.assertRedirects(response, reverse('buyer_quotes'))
+        self.assertFalse(Order.objects.filter(source_quote=quote).exists())
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, QuoteRequest.Status.QUOTED)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.inventory, 5)
 
     def test_quote_quantity_must_meet_product_minimum(self):
         self.client.force_login(self.buyer)
@@ -200,9 +364,13 @@ class MarketplaceFlowTests(TestCase):
         self.assertEqual(order.buyer, self.buyer)
         self.assertEqual(order.seller, self.seller)
         self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(order.unit_price, Decimal('250.00'))
+        self.assertEqual(order.total_amount, Decimal('2000.00'))
+        self.assertEqual(order.product_snapshot['name'], 'Cotton Fabric')
+        self.assertTrue(order.product_snapshot['captured_at'])
         buyer_orders = self.client.get(reverse('my_orders'))
         self.assertContains(buyer_orders, 'Cotton Fabric')
-        self.assertContains(buyer_orders, 'Orders &amp; chat')
+        self.assertContains(buyer_orders, 'Orders &amp; live chat')
         self.assertContains(
             self.client.get(reverse('order_detail', args=[order.pk])),
             'custom blue packaging',
@@ -224,6 +392,71 @@ class MarketplaceFlowTests(TestCase):
             self.client.get(reverse('order_detail', args=[order.pk])),
             'We can customize the packaging.',
         )
+
+    def test_live_order_chat_feed_is_private_and_returns_only_new_messages(self):
+        order = Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+        )
+        first_message = OrderMessage.objects.create(
+            order=order,
+            sender=self.seller,
+            body='The fabric is ready for dispatch.',
+        )
+        feed_url = reverse('order_messages_feed', args=[order.pk])
+        self.client.force_login(self.buyer)
+
+        response = self.client.get(feed_url)
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload['messages']), 1)
+        self.assertEqual(payload['messages'][0]['id'], first_message.pk)
+        self.assertEqual(payload['messages'][0]['sender_name'], 'Seller Works')
+        self.assertFalse(payload['messages'][0]['is_mine'])
+        self.assertEqual(self.client.get(feed_url, {'after': first_message.pk}).json()['messages'], [])
+
+        send_response = self.client.post(
+            reverse('send_order_message', args=[order.pk]),
+            {'body': 'Thanks, please share tracking when shipped.'},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(send_response.status_code, 201)
+        sent_payload = send_response.json()['message']
+        self.assertEqual(sent_payload['sender_id'], self.buyer.pk)
+        self.assertTrue(sent_payload['is_mine'])
+        follow_up = self.client.get(feed_url, {'after': first_message.pk}).json()
+        self.assertEqual(len(follow_up['messages']), 1)
+        self.assertEqual(follow_up['messages'][0]['body'], 'Thanks, please share tracking when shipped.')
+
+        outsider = User.objects.create_user(
+            username='outsider',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        self.client.force_login(outsider)
+        self.assertEqual(self.client.get(feed_url).status_code, 404)
+
+    def test_live_order_chat_rejects_invalid_json_message(self):
+        order = Order.objects.create(
+            product=self.product,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+        )
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(
+            reverse('send_order_message', args=[order.pk]),
+            {'body': ''},
+            HTTP_ACCEPT='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(OrderMessage.objects.filter(order=order).exists())
 
     def test_order_status_updates_follow_the_supplier_workflow(self):
         order = Order.objects.create(
@@ -259,7 +492,7 @@ class MarketplaceFlowTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.DELIVERED)
 
-    def test_buyer_can_cancel_pending_order_but_other_users_cannot_access_it(self):
+    def test_only_supplier_can_change_order_status_and_other_users_cannot_access_it(self):
         order = Order.objects.create(
             product=self.product,
             buyer=self.buyer,
@@ -273,7 +506,7 @@ class MarketplaceFlowTests(TestCase):
         )
         self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.CANCELLED)
+        self.assertEqual(order.status, Order.Status.PENDING)
 
         accepted_order = Order.objects.create(
             product=self.product,
@@ -289,6 +522,19 @@ class MarketplaceFlowTests(TestCase):
             {'status': Order.Status.CANCELLED},
         )
         self.assertRedirects(response, reverse('order_detail', args=[accepted_order.pk]))
+        accepted_order.refresh_from_db()
+        self.assertEqual(accepted_order.status, Order.Status.ACCEPTED)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.inventory, 92)
+
+        self.client.force_login(self.seller)
+        response = self.client.post(
+            reverse('update_order_status', args=[accepted_order.pk]),
+            {'status': Order.Status.CANCELLED},
+        )
+        self.assertRedirects(response, reverse('order_detail', args=[accepted_order.pk]))
+        accepted_order.refresh_from_db()
+        self.assertEqual(accepted_order.status, Order.Status.CANCELLED)
         self.product.refresh_from_db()
         self.assertEqual(self.product.inventory, 100)
 

@@ -2,53 +2,224 @@
 
 {% block title %}{{ page_title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .seller-products-page {
+        padding: 48px 0 60px;
+    }
+    .seller-products-panel {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+    }
+    .seller-stat {
+        padding: 20px;
+        height: 100%;
+    }
+    .seller-stat strong {
+        display: block;
+        color: #10233d;
+        font-size: 1.6rem;
+    }
+    .seller-stat span {
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    .demand-chart {
+        width: 176px;
+        aspect-ratio: 1;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #e2e8f0;
+        position: relative;
+    }
+    .demand-chart::after {
+        content: "";
+        position: absolute;
+        inset: 25%;
+        border-radius: 50%;
+        background: #fff;
+    }
+    .demand-legend {
+        display: grid;
+        gap: 10px;
+        min-width: 220px;
+    }
+    .demand-legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .demand-legend-label {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+    .demand-swatch {
+        width: 11px;
+        height: 11px;
+        flex: 0 0 auto;
+        border-radius: 3px;
+    }
+    .product-table th {
+        color: #64748b;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .product-table td {
+        vertical-align: middle;
+    }
+    .product-table .product-title {
+        color: #10233d;
+        font-weight: 700;
+    }
+    @media (max-width: 575.98px) {
+        .seller-products-page {
+            padding-top: 30px;
+        }
+        .demand-chart {
+            width: 144px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container py-5">
+<div class="container seller-products-page">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
         <div>
             <p class="text-uppercase text-primary small fw-bold mb-1">Seller tools</p>
-            <h2 class="mb-0">My products</h2>
+            <h1 class="h2 mb-0">My products</h1>
+            <p class="text-muted mb-0 mt-2">Your published listings and past products, with buyer and sales activity.</p>
         </div>
         <a href="{% url 'create_product' %}" class="btn btn-gab">Add product</a>
     </div>
 
-    {% if products %}
-        <div class="row g-4">
-            {% for product in products %}
-                <div class="col-md-6 col-lg-4">
-                    <div class="card dashboard-card h-100 p-4">
-                        <div class="d-flex justify-content-between gap-2">
-                            <h5 class="fw-bold">{{ product.name }}</h5>
-                            {% if product.is_active %}
-                                <span class="badge text-bg-success align-self-start">Published</span>
-                            {% else %}
-                                <span class="badge text-bg-secondary align-self-start">Hidden</span>
-                            {% endif %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-4">
+            <div class="seller-products-panel seller-stat">
+                <strong>{{ products|length }}</strong>
+                <span>Products in catalog history</span>
+            </div>
+        </div>
+        <div class="col-6 col-lg-4">
+            <div class="seller-products-panel seller-stat">
+                <strong>{{ active_product_count }}</strong>
+                <span>Currently published</span>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="seller-products-panel seller-stat">
+                <strong>{{ buyer_count }}</strong>
+                <span>Unique buyers across accepted orders</span>
+            </div>
+        </div>
+    </div>
+
+    <section class="seller-products-panel p-4 mb-4" aria-labelledby="demand-heading">
+        <div class="mb-3">
+            <h2 class="h5 mb-1" id="demand-heading">What buyers are ordering</h2>
+            <p class="text-muted small mb-0">Demand by category, based on units in accepted, processing, shipped, and delivered orders.</p>
+        </div>
+        {% if demand_categories %}
+            <div class="d-flex align-items-center flex-wrap gap-4">
+                <div
+                    class="demand-chart"
+                    role="img"
+                    aria-label="Pie chart showing ordered units by product category"
+                    style="background: conic-gradient({{ demand_chart_gradient }});"
+                ></div>
+                <div class="demand-legend">
+                    {% for item in demand_categories %}
+                        <div class="demand-legend-item">
+                            <span class="demand-legend-label">
+                                <span class="demand-swatch" style="background-color: {{ item.color }};"></span>
+                                <span>{{ item.label }}</span>
+                            </span>
+                            <strong>{{ item.units_sold }} <span class="text-muted fw-normal">({{ item.percentage }}%)</span></strong>
                         </div>
-                        <p class="text-muted small mb-2">{{ product.category }} · ₹{{ product.price }}</p>
-                        <p class="small mb-3">{{ product.inventory }} in stock</p>
-                        <div class="mt-auto d-flex gap-2">
-                            <a href="{% url 'edit_product' product.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
-                            {% if product.is_active %}
-                                <a href="{% url 'product_detail' product.slug %}" class="btn btn-sm btn-outline-secondary">View listing</a>
-                            {% endif %}
-                            <form method="post" action="{% url 'toggle_product' product.pk %}">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-{% if product.is_active %}danger{% else %}success{% endif %}">
-                                    {% if product.is_active %}Hide{% else %}Publish{% endif %}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
+                    {% endfor %}
+                    <p class="text-muted small mb-0 mt-1">{{ units_sold }} units ordered in total</p>
                 </div>
-            {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted mb-0">Category demand will appear here after an order is accepted.</p>
+        {% endif %}
+    </section>
+
+    <section class="seller-products-panel overflow-hidden" aria-labelledby="catalog-heading">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-4 pb-3">
+            <div>
+                <h2 class="h5 mb-1" id="catalog-heading">Product catalog</h2>
+                <p class="text-muted small mb-0">Hidden products stay here as part of your history. Published products appear in the catalog, where buyers can order and sort by nearby PIN code.</p>
+            </div>
+            <a href="{% url 'catalog' %}" class="btn btn-sm btn-outline-primary">View buyer catalog</a>
         </div>
-    {% else %}
-        <div class="text-center py-5 bg-white rounded-4">
-            <h4>No products listed yet</h4>
-            <p class="text-muted">Add your first product to make it discoverable in the catalog.</p>
-            <a href="{% url 'create_product' %}" class="btn btn-gab">Add your first product</a>
-        </div>
-    {% endif %}
+
+        {% if products %}
+            <div class="table-responsive">
+                <table class="table product-table mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Product</th>
+                            <th>Status</th>
+                            <th>Buyers</th>
+                            <th>Orders</th>
+                            <th>Units sold</th>
+                            <th>In stock</th>
+                            <th>Added</th>
+                            <th class="pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="product-title d-block">{{ product.name }}</span>
+                                    <span class="text-muted small">{{ product.get_category_display }} · ₹{{ product.price }}</span>
+                                </td>
+                                <td>
+                                    {% if product.is_active %}
+                                        <span class="badge text-bg-success">Published</span>
+                                    {% else %}
+                                        <span class="badge text-bg-secondary">Hidden</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ product.buyer_count }}</td>
+                                <td>{{ product.order_count }}</td>
+                                <td>{{ product.units_sold|default_if_none:0 }}</td>
+                                <td>{{ product.inventory }}</td>
+                                <td class="text-nowrap">{{ product.created_at|date:"M j, Y" }}</td>
+                                <td class="pe-4">
+                                    <div class="d-flex gap-2">
+                                        <a href="{% url 'edit_product' product.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                        {% if product.is_active %}
+                                            <a href="{% url 'product_detail' product.slug %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                        {% endif %}
+                                        <form method="post" action="{% url 'toggle_product' product.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-{% if product.is_active %}danger{% else %}success{% endif %}">
+                                                {% if product.is_active %}Hide{% else %}Publish{% endif %}
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5 px-3">
+                <h3 class="h5">No products listed yet</h3>
+                <p class="text-muted">Add your first product to make it discoverable in the buyer catalog.</p>
+                <a href="{% url 'create_product' %}" class="btn btn-gab">Add your first product</a>
+            </div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}

@@ -29,7 +29,15 @@ from .forms import (
     UserLoginForm,
 )
 from .models import PasswordResetChallenge, User, UserRole
-from gallery.models import Order, Product, QuoteRequest, SellerBanner
+from gallery.models import (
+    CommissionPlan,
+    CommissionStatement,
+    Order,
+    Product,
+    QuoteRequest,
+    SellerBanner,
+    SellerPayoutProfile,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -326,6 +334,17 @@ def account_settings_view(request):
         if has_seller_role
         else None
     )
+    payout_profile = None
+    commission_statements = []
+    if has_seller_role:
+        payout_profile, _ = SellerPayoutProfile.objects.get_or_create(user=request.user)
+        commission_statements = list(CommissionStatement.objects.filter(seller=request.user)[:6])
+    default_commission_plan = CommissionPlan.objects.filter(is_default=True, is_active=True).first()
+    seller_commission_plan = (
+        payout_profile.commission_plan
+        if payout_profile and payout_profile.commission_plan_id
+        else default_commission_plan
+    )
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -400,6 +419,9 @@ def account_settings_view(request):
         'switch_role_form': switch_role_form,
         'location_form': location_form,
         'business_profile_form': business_profile_form,
+        'payout_profile': payout_profile,
+        'seller_commission_plan': seller_commission_plan,
+        'commission_statements': commission_statements,
         'has_seller_role': has_seller_role,
         'available_roles': [
             (role, role_labels[role])

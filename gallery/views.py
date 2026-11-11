@@ -1,4 +1,8 @@
+import hashlib
+import hmac
+import json
 import mimetypes
+import os
 from pathlib import Path
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -7,29 +11,40 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import SuspiciousFileOperation
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Q, Sum
 from django.db.models.query import QuerySet
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.utils import timezone
 from django.utils._os import safe_join
-from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_POST
 from accounts.business_profiles import business_profile_for, business_profiles_for
 from accounts.models import PincodeLocation, User
 from .models import (
     GalleryImage,
     Order,
     OrderMessage,
+    PaymentAttempt,
+    PaymentWebhookEvent,
     Product,
     ProductInteraction,
     QuoteRequest,
     SellerBanner,
 )
 from .recommendations import distance_km, hash_search_query, rank_products
+from .payment_services import (
+    PaymentRecordingError,
+    record_verified_provider_capture,
+    record_verified_provider_failure,
+    report_offline_payment,
+)
+from .razorpay_route import RazorpayRouteError, checkout_is_available, start_checkout
 from .forms import (
     GalleryImageForm,
     OrderCreateForm,
     OrderMessageForm,
     OrderStatusForm,
+    OfflinePaymentForm,
     ProductForm,
     QuoteRequestForm,
     QuoteResponseForm,
@@ -41,6 +56,20 @@ SELLER_ROLES = {
     User.Role.INDUSTRY,
     User.Role.WHOLESALER,
     User.Role.SHOPKEEPER,
+}
+PURCHASED_ORDER_STATUSES = (
+    Order.Status.ACCEPTED,
+    Order.Status.PROCESSING,
+    Order.Status.SHIPPED,
+    Order.Status.DELIVERED,
+)
+DEMAND_CHART_COLORS = {
+    Product.Category.FABRICS: '#4263eb',
+    Product.Category.MACHINERY: '#12b886',
+    Product.Category.PACKAGING: '#f59f00',
+    Product.Category.CHEMICALS: '#e64980',
+    Product.Category.FOOD: '#15aabf',
+    Product.Category.ELECTRONICS: '#845ef7',
 }
 BUYER_SELLER_ROLES = {
     User.Role.BUYER: Product.SellerRole.SHOPKEEPER,
@@ -453,9 +482,80 @@ def product_detail(request, slug):
 def my_products(request):
     if not _seller_required(request):
         return redirect(request.user.get_dashboard_url())
-    products = Product.objects.filter(owner=request.user)
+    purchased_orders = Q(
+        orders__seller=request.user,
+        orders__status__in=PURCHASED_ORDER_STATUSES,
+    )
+    products = list(
+        Product.objects.filter(owner=request.user).annotate(
+            buyer_count=Count(
+                'orders__buyer',
+                filter=purchased_orders,
+                distinct=True,
+            ),
+            order_count=Count(
+                'orders',
+                filter=purchased_orders,
+                distinct=True,
+            ),
+            units_sold=Sum('orders__quantity', filter=purchased_orders),
+        )
+    )
+    demand = Product.objects.filter(owner=request.user).values(
+        'category',
+    ).annotate(
+        units_sold=Sum(
+            'orders__quantity',
+            filter=Q(
+                orders__seller=request.user,
+                orders__status__in=PURCHASED_ORDER_STATUSES,
+            ),
+        ),
+    )
+    units_by_category = {
+        row['category']: row['units_sold'] or 0
+        for row in demand
+    }
+    category_labels = dict(Product.Category.choices)
+    total_units_sold = sum(units_by_category.values())
+    demand_categories = []
+    gradient_segments = []
+    degrees = 0
+    for category, label in Product.Category.choices:
+        units_sold = units_by_category.get(category, 0)
+        if not units_sold:
+            continue
+        end_degrees = (
+            360
+            if units_sold == total_units_sold
+            else degrees + (360 * units_sold / total_units_sold)
+        )
+        color = DEMAND_CHART_COLORS[category]
+        gradient_segments.append(
+            f'{color} {degrees:.2f}deg {end_degrees:.2f}deg'
+        )
+        demand_categories.append({
+            'category': category,
+            'label': category_labels[category],
+            'units_sold': units_sold,
+            'percentage': round(units_sold * 100 / total_units_sold),
+            'color': color,
+        })
+        degrees = end_degrees
+    sales_totals = Order.objects.filter(
+        seller=request.user,
+        status__in=PURCHASED_ORDER_STATUSES,
+    ).aggregate(
+        buyer_count=Count('buyer', distinct=True),
+        units_sold=Sum('quantity'),
+    )
     return render(request, 'gallery/my_products.html', {
         'products': products,
+        'active_product_count': sum(product.is_active for product in products),
+        'buyer_count': sales_totals['buyer_count'],
+        'units_sold': sales_totals['units_sold'] or 0,
+        'demand_categories': demand_categories,
+        'demand_chart_gradient': ', '.join(gradient_segments),
         'page_title': 'My Products - GAB',
     })
 
@@ -676,13 +776,66 @@ def respond_to_quote(request, pk):
     if not _seller_required(request):
         return redirect(request.user.get_dashboard_url())
     quote = get_object_or_404(QuoteRequest, pk=pk, seller=request.user)
+    if quote.status != QuoteRequest.Status.PENDING:
+        messages.warning(request, 'This quote request has already been answered.')
+        return redirect('seller_quotes')
     form = QuoteResponseForm(request.POST, instance=quote)
     if form.is_valid():
         form.save()
         messages.success(request, 'Your response was sent to the buyer.')
     else:
-        messages.error(request, 'Please choose a valid response status.')
+        messages.error(
+            request,
+            'Choose a valid response and enter a price per unit when sending a quote.',
+        )
     return redirect('seller_quotes')
+
+
+@login_required
+@require_POST
+def accept_quote(request, pk):
+    quote = get_object_or_404(
+        QuoteRequest.objects.select_related('product', 'seller'),
+        pk=pk,
+        buyer=request.user,
+    )
+    with transaction.atomic():
+        quote = QuoteRequest.objects.select_for_update().select_related(
+            'product', 'seller',
+        ).get(pk=quote.pk)
+        existing_order = Order.objects.filter(source_quote=quote).first()
+        if existing_order:
+            return redirect('order_detail', pk=existing_order.pk)
+        if (
+            quote.status != QuoteRequest.Status.QUOTED
+            or quote.quoted_unit_price is None
+        ):
+            messages.error(request, 'This request does not have an active seller quote.')
+            return redirect('buyer_quotes')
+
+        product = Product.objects.select_for_update().get(pk=quote.product_id)
+        if product.inventory < quote.quantity:
+            messages.error(
+                request,
+                'The quoted quantity is no longer available. Contact the seller for an update.',
+            )
+            return redirect('buyer_quotes')
+
+        order = Order.objects.create(
+            product=product,
+            buyer=quote.buyer,
+            seller=quote.seller,
+            source_quote=quote,
+            quantity=quote.quantity,
+            unit_price=quote.quoted_unit_price,
+            notes=quote.message,
+            status=Order.Status.PENDING,
+        )
+        quote.status = QuoteRequest.Status.ACCEPTED
+        quote.save(update_fields=['status', 'updated_at'])
+
+    messages.success(request, 'You accepted the quote and sent an order request to the supplier.')
+    return redirect('order_detail', pk=order.pk)
 
 
 def _allowed_order_statuses(order, user):
@@ -692,11 +845,6 @@ def _allowed_order_statuses(order, user):
             Order.Status.ACCEPTED: [Order.Status.PROCESSING, Order.Status.CANCELLED],
             Order.Status.PROCESSING: [Order.Status.SHIPPED, Order.Status.CANCELLED],
             Order.Status.SHIPPED: [Order.Status.DELIVERED],
-        }
-    elif order.buyer_id == user.pk:
-        transitions = {
-            Order.Status.PENDING: [Order.Status.CANCELLED],
-            Order.Status.ACCEPTED: [Order.Status.CANCELLED],
         }
     else:
         return []
@@ -710,6 +858,43 @@ def _get_participant_order(request, pk):
         ),
         pk=pk,
     )
+
+
+def _serialize_order_messages(order, order_messages, current_user):
+    profile_pairs = set()
+    buyer_role = SELLER_BUYER_ROLES.get(order.product.seller_role)
+    for message in order_messages:
+        if message.sender_id == order.seller_id:
+            sender_role = order.product.seller_role
+        else:
+            sender_role = buyer_role
+        if message.sender_id and sender_role:
+            profile_pairs.add((message.sender_id, sender_role))
+
+    profiles = business_profiles_for(profile_pairs)
+    serialized = []
+    for message in order_messages:
+        sender_role = (
+            order.product.seller_role
+            if message.sender_id == order.seller_id
+            else buyer_role
+        )
+        sender_profile = profiles.get((message.sender_id, sender_role))
+        sender_name = (
+            (sender_profile.business_name if sender_profile else '')
+            or message.sender.business_name
+            or message.sender.get_full_name()
+            or message.sender.username
+        )
+        serialized.append({
+            'id': message.pk,
+            'sender_id': message.sender_id,
+            'sender_name': sender_name,
+            'body': message.body,
+            'created_at': message.created_at.isoformat(),
+            'is_mine': message.sender_id == current_user.pk,
+        })
+    return serialized
 
 
 @login_required
@@ -843,13 +1028,218 @@ def order_detail(request, pk):
         OrderStatusForm(allowed_statuses=allowed_statuses)
         if allowed_statuses else None
     )
+    offline_payment_form = (
+        OfflinePaymentForm()
+        if order.seller_id == request.user.pk
+        and order.payment_status in {'UNPAID', 'FAILED'}
+        and order.status not in {Order.Status.PENDING, Order.Status.DECLINED, Order.Status.CANCELLED}
+        else None
+    )
+    payment_attempts = order.payment_attempts.select_related('recorded_by').all()
     return render(request, 'gallery/order_detail.html', {
         'order': order,
+        'payment_attempts': payment_attempts,
+        'online_payment_available': (
+            order.buyer_id == request.user.pk and checkout_is_available(order)
+        ),
+        'offline_payment_form': offline_payment_form,
         'order_messages': order_messages,
+        'last_message_id': max((message.pk for message in order_messages), default=0),
         'message_form': OrderMessageForm(),
         'status_form': status_form,
+        'is_order_supplier': order.seller_id == request.user.pk,
         'page_title': f'Order #{order.pk} - GAB',
     })
+
+
+@login_required
+@require_POST
+def start_order_payment(request, pk):
+    order = _get_participant_order(request, pk)
+    try:
+        checkout = start_checkout(order_id=order.pk, buyer_id=request.user.pk)
+    except RazorpayRouteError as error:
+        return JsonResponse({'ok': False, 'error': str(error)}, status=409)
+    return JsonResponse({
+        'ok': True,
+        **checkout,
+        'name': 'GAB Platform',
+        'description': f'Order #{order.pk} · {order.product_name}',
+    })
+
+
+@login_required
+@require_GET
+def order_payment_status(request, pk):
+    order = _get_participant_order(request, pk)
+    return JsonResponse({
+        'ok': True,
+        'payment_status': order.payment_status,
+        'payment_status_display': order.get_payment_status_display(),
+        'paid_at': order.paid_at.isoformat() if order.paid_at else None,
+    })
+
+
+@csrf_exempt
+@require_POST
+def razorpay_route_webhook(request):
+    webhook_secret = os.environ.get('GAB_RAZORPAY_WEBHOOK_SECRET', '')
+    signature = request.headers.get('X-Razorpay-Signature', '')
+    event_id = request.headers.get('X-Razorpay-Event-Id', '').strip()
+    if not webhook_secret:
+        return HttpResponse(status=503)
+    expected = hmac.new(
+        webhook_secret.encode('utf-8'),
+        request.body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature):
+        return HttpResponseBadRequest('Invalid webhook signature.')
+    if not event_id or len(event_id) > 160:
+        return HttpResponseBadRequest('Missing provider event ID.')
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return HttpResponseBadRequest('Invalid webhook payload.')
+
+    if not isinstance(payload, dict):
+        return HttpResponseBadRequest('Invalid webhook payload.')
+    event_type = payload.get('event', '')
+    if not isinstance(event_type, str):
+        return HttpResponseBadRequest('Invalid webhook event type.')
+    event_payload = payload.get('payload')
+    payment_payload = event_payload.get('payment') if isinstance(event_payload, dict) else None
+    entity = payment_payload.get('entity') if isinstance(payment_payload, dict) else None
+    if event_type not in {'payment.captured', 'payment.failed'} or not isinstance(entity, dict):
+        PaymentWebhookEvent.objects.get_or_create(
+            provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+            event_id=event_id,
+            defaults={
+                'event_type': event_type[:100] or 'unknown',
+                'payload_hash': hashlib.sha256(request.body).hexdigest(),
+                'safe_payload': {},
+                'signature_verified': True,
+                'status': PaymentWebhookEvent.Status.IGNORED,
+            },
+        )
+        return HttpResponse(status=200)
+
+    provider_order_id = str(entity.get('order_id') or '')
+    attempt = PaymentAttempt.objects.filter(
+        provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+        provider_order_id=provider_order_id,
+    ).first()
+    safe_payload = {
+        'order_id': provider_order_id,
+        'payment_id': str(entity.get('id') or ''),
+        'amount': entity.get('amount'),
+        'currency': str(entity.get('currency') or ''),
+        'status': str(entity.get('status') or ''),
+    }
+    digest = hashlib.sha256(request.body).hexdigest()
+    if not attempt:
+        PaymentWebhookEvent.objects.get_or_create(
+            provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+            event_id=event_id,
+            defaults={
+                'event_type': event_type,
+                'payload_hash': digest,
+                'safe_payload': safe_payload,
+                'signature_verified': True,
+                'status': PaymentWebhookEvent.Status.FAILED,
+                'error_summary': 'Provider order is not linked to a local attempt; reconcile manually.',
+            },
+        )
+        return HttpResponse(status=200)
+
+    if event_type == 'payment.captured':
+        if entity.get('status') != 'captured':
+            PaymentWebhookEvent.objects.get_or_create(
+                provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+                event_id=event_id,
+                defaults={
+                    'event_type': event_type,
+                    'payload_hash': digest,
+                    'safe_payload': safe_payload,
+                    'signature_verified': True,
+                    'status': PaymentWebhookEvent.Status.FAILED,
+                    'error_summary': 'Capture event did not contain a captured payment status.',
+                },
+            )
+            return HttpResponse(status=200)
+        try:
+            amount_paise = int(entity.get('amount'))
+        except (TypeError, ValueError):
+            amount_paise = 0
+        payment_id = str(entity.get('id') or '')
+        currency = str(entity.get('currency') or '')
+        if not payment_id or amount_paise <= 0 or not currency:
+            PaymentWebhookEvent.objects.get_or_create(
+                provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+                event_id=event_id,
+                defaults={
+                    'event_type': event_type,
+                    'payload_hash': digest,
+                    'safe_payload': safe_payload,
+                    'signature_verified': True,
+                    'status': PaymentWebhookEvent.Status.FAILED,
+                    'error_summary': 'Captured event is missing payment ID, amount, or currency.',
+                },
+            )
+            return HttpResponse(status=200)
+        record_verified_provider_capture(
+            provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+            event_id=event_id,
+            event_type=event_type,
+            attempt_id=attempt.pk,
+            provider_order_id=provider_order_id,
+            provider_payment_id=payment_id,
+            amount_paise=amount_paise,
+            currency=currency,
+            payload_hash=digest,
+            safe_payload=safe_payload,
+        )
+    else:
+        record_verified_provider_failure(
+            provider=PaymentAttempt.Provider.RAZORPAY_ROUTE,
+            event_id=event_id,
+            event_type=event_type,
+            attempt_id=attempt.pk,
+            provider_order_id=provider_order_id,
+            provider_payment_id=str(entity.get('id') or ''),
+            failure_code=str(entity.get('error_code') or ''),
+            payload_hash=digest,
+            safe_payload=safe_payload,
+        )
+    return HttpResponse(status=200)
+
+
+@login_required
+@require_POST
+def report_order_offline_payment(request, pk):
+    order = _get_participant_order(request, pk)
+    if order.seller_id != request.user.pk:
+        messages.error(request, 'Only the seller can report an offline payment.')
+        return redirect('order_detail', pk=order.pk)
+    form = OfflinePaymentForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Choose a valid offline payment method.')
+        return redirect('order_detail', pk=order.pk)
+    try:
+        report_offline_payment(
+            order_id=order.pk,
+            seller_id=request.user.pk,
+            method=form.cleaned_data['method'],
+            reference=form.cleaned_data['reference'],
+        )
+    except PaymentRecordingError as error:
+        messages.error(request, str(error))
+        return redirect('order_detail', pk=order.pk)
+    messages.success(
+        request,
+        'Offline payment recorded as seller-reported; GAB has not independently verified it.',
+    )
+    return redirect('order_detail', pk=order.pk)
 
 
 @login_required
@@ -858,14 +1248,44 @@ def send_order_message(request, pk):
     order = _get_participant_order(request, pk)
     form = OrderMessageForm(request.POST)
     if form.is_valid():
-        OrderMessage.objects.create(
+        message = OrderMessage.objects.create(
             order=order,
             sender=request.user,
             body=form.cleaned_data['body'],
         )
+        if 'application/json' in request.headers.get('Accept', ''):
+            payload = _serialize_order_messages(order, [message], request.user)[0]
+            return JsonResponse({'ok': True, 'message': payload}, status=201)
     else:
+        if 'application/json' in request.headers.get('Accept', ''):
+            return JsonResponse(
+                {'ok': False, 'errors': form.errors.get_json_data()},
+                status=400,
+            )
         messages.error(request, 'Messages must contain up to 2,000 characters.')
     return redirect('order_detail', pk=order.pk)
+
+
+@login_required
+@require_GET
+def order_messages_feed(request, pk):
+    order = _get_participant_order(request, pk)
+    try:
+        after_id = int(request.GET.get('after', '0'))
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid message cursor.'}, status=400)
+    if after_id < 0:
+        return JsonResponse({'ok': False, 'error': 'Invalid message cursor.'}, status=400)
+
+    new_messages = list(
+        OrderMessage.objects.filter(order=order, pk__gt=after_id)
+        .select_related('sender')
+        .order_by('pk')[:100]
+    )
+    return JsonResponse({
+        'ok': True,
+        'messages': _serialize_order_messages(order, new_messages, request.user),
+    })
 
 
 @login_required

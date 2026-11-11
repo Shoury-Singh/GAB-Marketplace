@@ -17,6 +17,7 @@
                         </div>
                         <span class="badge text-bg-secondary">{{ quote.get_status_display }}</span>
                     </div>
+                    {% if quote.status == 'PENDING' %}
                     <form method="post" action="{% url 'respond_to_quote' quote.pk %}" class="row g-2 align-items-end">
                         {% csrf_token %}
                         <div class="col-md-3">
@@ -26,6 +27,10 @@
                                 <option value="DECLINED" {% if quote.status == 'DECLINED' %}selected{% endif %}>Declined</option>
                             </select>
                         </div>
+                        <div class="col-md-3">
+                            <label for="price-{{ quote.pk }}" class="form-label">Price per unit (₹)</label>
+                            <input id="price-{{ quote.pk }}" type="number" name="quoted_unit_price" class="form-control" min="0.01" step="0.01" value="{{ quote.quoted_unit_price|default_if_none:'' }}" placeholder="Required for a quote">
+                        </div>
                         <div class="col-md">
                             <label for="response-{{ quote.pk }}" class="form-label">Response to buyer</label>
                             <textarea id="response-{{ quote.pk }}" name="seller_response" class="form-control" rows="2" maxlength="1000" placeholder="Price, availability, or a message">{{ quote.seller_response }}</textarea>
@@ -34,6 +39,10 @@
                             <button type="submit" class="btn btn-gab">Send response</button>
                         </div>
                     </form>
+                    {% endif %}
+                    {% if quote.status == 'QUOTED' %}
+                        <p class="small text-muted mt-2 mb-0">Quoted at ₹{{ quote.quoted_unit_price }} per unit.</p>
+                    {% endif %}
                 </article>
             {% endfor %}
         </div>

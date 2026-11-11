@@ -78,6 +78,48 @@
                 </section>
             {% endif %}
 
+            {% if payout_profile %}
+                <section class="card dashboard-card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">Payout details</h2>
+                        <p class="text-muted">Seller payout onboarding is handled by GAB’s approved payment provider. GAB does not collect bank or KYC documents on this page.</p>
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Provider</dt><dd class="col-sm-8">{{ payout_profile.get_provider_display }}</dd>
+                            <dt class="col-sm-4">Onboarding status</dt><dd class="col-sm-8">{{ payout_profile.get_onboarding_status_display }}</dd>
+                            {% if seller_commission_plan %}
+                                <dt class="col-sm-4">Commission plan</dt>
+                                <dd class="col-sm-8">{{ seller_commission_plan.name }} · {{ seller_commission_plan.commission_rate_percent|floatformat:2 }}%</dd>
+                            {% endif %}
+                        </dl>
+                        {% if payout_profile.provider_onboarding_url and payout_profile.onboarding_status != 'ACTIVE' %}
+                            <a class="btn btn-outline-primary mt-3" href="{{ payout_profile.provider_onboarding_url }}" target="_blank" rel="noopener noreferrer">Continue secure provider onboarding</a>
+                        {% else %}
+                            <p class="small text-muted mt-3 mb-0">Provider onboarding will appear here after GAB’s marketplace payment account is approved and connected.</p>
+                        {% endif %}
+                    </div>
+                </section>
+                <section class="card dashboard-card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <h2 class="h5 fw-bold">Monthly commission statements</h2>
+                        {% if commission_statements %}
+                            <div class="table-responsive"><table class="table align-middle mb-0">
+                                <thead><tr><th>Statement</th><th>Period</th><th>Commission</th><th>Status</th></tr></thead>
+                                <tbody>{% for statement in commission_statements %}
+                                    <tr>
+                                        <td>{{ statement.statement_number }}</td>
+                                        <td>{{ statement.period_start|date:"F Y" }}</td>
+                                        <td>₹{{ statement.commission_total_rupees|floatformat:2 }}{% if statement.gst_total_paise == None %}<span class="d-block small text-muted">GST awaits CA setup</span>{% endif %}</td>
+                                        <td>{{ statement.get_status_display }}</td>
+                                    </tr>
+                                {% endfor %}</tbody>
+                            </table></div>
+                        {% else %}
+                            <p class="text-muted mb-0">Offline commission statements will appear here after a monthly statement is prepared.</p>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endif %}
+
             {% if available_roles|length > 1 %}
                 <section class="card dashboard-card border-0 shadow-sm mb-4">
                     <div class="card-body p-4">

@@ -18,7 +18,19 @@
                     </div>
                     {% if quote.message %}<p class="mb-2">{{ quote.message }}</p>{% endif %}
                     {% if quote.seller_response %}
-                        <div class="alert alert-info mb-0"><strong>Seller response:</strong> {{ quote.seller_response }}</div>
+                        <div class="alert alert-info"><strong>Seller response:</strong> {{ quote.seller_response }}</div>
+                    {% endif %}
+                    {% if quote.quoted_unit_price %}
+                        <p class="mb-3"><strong>Quoted price:</strong> ₹{{ quote.quoted_unit_price }} per unit · {{ quote.quantity }} units</p>
+                    {% endif %}
+                    {% if quote.status == 'QUOTED' %}
+                        <form method="post" action="{% url 'accept_quote' quote.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-gab">Accept quote and create order</button>
+                            <p class="form-text mt-2 mb-0">Accepting reserves the quoted quantity and creates an order at this price.</p>
+                        </form>
+                    {% elif quote.status == 'ACCEPTED' %}
+                        <a href="{% url 'order_detail' quote.converted_order.pk %}" class="btn btn-outline-primary">Open created order</a>
                     {% elif quote.status == 'PENDING' %}
                         <p class="small text-muted mb-0">Waiting for the seller to respond.</p>
                     {% endif %}

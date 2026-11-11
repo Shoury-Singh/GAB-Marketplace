@@ -29,6 +29,16 @@
         font-size: 0.75rem;
         margin-bottom: 0.3rem;
     }
+    .order-message-body { white-space: pre-wrap; }
+    .chat-live-dot {
+        display: inline-block;
+        width: .5rem;
+        height: .5rem;
+        margin-right: .35rem;
+        border-radius: 50%;
+        background: #12b886;
+        box-shadow: 0 0 0 3px rgba(18, 184, 134, .14);
+    }
     html[data-bs-theme="dark"] .order-chat {
         background: #0f1b2e;
     }
@@ -52,9 +62,11 @@
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
                 <p class="text-uppercase text-primary small fw-bold mb-1">Order #{{ order.pk }}</p>
-                <h1 class="h3 fw-bold mb-2">{{ order.product.name }}</h1>
+                <h1 class="h3 fw-bold mb-2">{{ order.product_name }}</h1>
                 <div class="text-muted">
-                    {{ order.quantity }} units · Buyer: {{ order.buyer_profile.business_name|default:order.buyer.business_name|default:order.buyer.username }}
+                    {{ order.quantity }} units
+                    {% if order.unit_price != None %}· ₹{{ order.unit_price }} per unit · Order total ₹{{ order.total_amount }}{% endif %}
+                    · Buyer: {{ order.buyer_profile.business_name|default:order.buyer.business_name|default:order.buyer.username }}
                     · Supplier: {{ order.seller_profile.business_name|default:order.seller.business_name|default:order.seller.username }}
                 </div>
             </div>
@@ -65,34 +77,112 @@
                 <strong>Order details:</strong> {{ order.notes }}
             </div>
         {% endif %}
+        {% if order.unit_price == None %}
+            <div class="small text-muted mt-3">This older order does not have a recorded agreed price.</div>
+        {% endif %}
+        {% if order.product_snapshot.captured_at %}
+            <div class="small text-muted mt-3">Product details saved with this order: {{ order.product_snapshot.category }} · {{ order.product_snapshot.supplier }} · {{ order.product_snapshot.location }}</div>
+        {% endif %}
         <div class="small text-muted mt-3">
-            Discuss payment, delivery arrangements, and product customizations here. Payments are handled outside GAB.
+            Order progress and payment progress are tracked separately. Discuss product and delivery questions in the live chat below.
         </div>
     </div>
+
+
+    <section class="card dashboard-card p-4 mb-4" aria-labelledby="payment-heading">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <p class="text-uppercase text-primary small fw-bold mb-1">Transaction</p>
+                <h2 id="payment-heading" class="h5 fw-bold mb-1">Payment status</h2>
+                <p class="mb-0 text-muted">{% if order.total_amount != None %}Order amount: ₹{{ order.total_amount }}{% else %}Agreed price is not recorded for this older order.{% endif %}</p>
+            </div>
+            <span class="badge {% if order.payment_status == 'PAID' %}text-bg-success{% elif order.payment_status == 'OFFLINE_REPORTED' %}text-bg-warning{% elif order.payment_status == 'PENDING' %}text-bg-info{% else %}text-bg-secondary{% endif %}">
+                {{ order.get_payment_status_display }}
+            </span>
+        </div>
+        {% if order.payment_status == 'OFFLINE_REPORTED' %}
+            <div class="alert alert-warning mt-3 mb-0">The seller reported this offline payment. GAB has not independently verified it.</div>
+        {% elif order.payment_status == 'UNPAID' %}
+            <p class="small text-muted mt-3 mb-0">Payment confirmation comes from the provider’s server notification. A seller can also record bank transfer, credit, cash, or UPI payment made outside GAB.</p>
+        {% elif order.payment_status == 'PENDING' %}
+            <div class="alert alert-info mt-3 mb-0">GAB is waiting for the payment provider to confirm this attempt. Do not pay again while it is pending.</div>
+        {% elif order.payment_status == 'FAILED' %}
+            <p class="small text-muted mt-3 mb-0">The provider confirmed this attempt did not complete. You can start a fresh checkout if online payment is available.</p>
+        {% endif %}
+        {% if online_payment_available %}
+            <div class="mt-3">
+                <button id="start-online-payment" class="btn btn-gab" type="button" data-start-url="{% url 'start_order_payment' order.pk %}" data-status-url="{% url 'order_payment_status' order.pk %}">
+                    <i class="bi bi-shield-lock me-1" aria-hidden="true"></i>Pay securely online
+                </button>
+                <span id="online-payment-status" class="small text-muted ms-2" role="status" aria-live="polite"></span>
+            </div>
+        {% endif %}
+        {% if not online_payment_available and order.buyer_id == user.id and order.payment_status != 'PAID' and order.payment_status != 'OFFLINE_REPORTED' and order.payment_status != 'REFUNDED' %}
+            <p class="small text-muted mt-3 mb-0">Online checkout is not available until GAB and this seller finish provider setup. The seller can still record an offline payment.</p>
+        {% endif %}
+        {% if offline_payment_form %}
+            <form method="post" action="{% url 'report_order_offline_payment' order.pk %}" class="row g-3 mt-1">
+                {% csrf_token %}
+                <div class="col-md-5">
+                    <label for="{{ offline_payment_form.method.id_for_label }}" class="form-label fw-semibold">Offline payment method</label>
+                    {{ offline_payment_form.method }}
+                </div>
+                <div class="col-md-5">
+                    <label for="{{ offline_payment_form.reference.id_for_label }}" class="form-label fw-semibold">Reference (optional)</label>
+                    {{ offline_payment_form.reference }}
+                </div>
+                <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary w-100" type="submit">Record payment</button></div>
+                <div class="col-12 small text-muted">This creates an auditable seller report and commission entry. Add a bank or invoice reference where available.</div>
+            </form>
+        {% endif %}
+        {% if payment_attempts %}
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Recorded</th><th>Method</th><th>Amount</th><th>Reference</th></tr></thead>
+                    <tbody>
+                    {% for attempt in payment_attempts %}
+                        <tr>
+                            <td>{{ attempt.created_at|date:"M j, Y, g:i a" }}</td>
+                            <td>{{ attempt.get_offline_method_display|default:attempt.get_provider_display }}</td>
+                            <td>{% if attempt.offline_method %}₹{{ order.total_amount }}{% else %}{{ attempt.amount_paise }} paise{% endif %}</td>
+                            <td>{{ attempt.offline_reference|default:"—" }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </section>
 
     <div class="row g-4 align-items-start">
         <div class="col-lg-8">
             <section class="card dashboard-card p-3 p-md-4">
-                <h2 class="h5 fw-bold mb-3"><i class="bi bi-chat-dots me-2" aria-hidden="true"></i>Order conversation</h2>
-                <div class="order-chat" id="order-chat" aria-live="polite">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+                    <h2 class="h5 fw-bold mb-0"><i class="bi bi-chat-dots me-2" aria-hidden="true"></i>Live order chat</h2>
+                    <span class="badge rounded-pill text-bg-success"><span class="chat-live-dot"></span>LIVE</span>
+                </div>
+                <p class="small text-muted mb-3">Discuss product details, quantities, delivery, and order questions with the other participant.</p>
+                <div id="chat-connection-status" class="small text-success mb-2" role="status" aria-live="polite">Connecting to live chat…</div>
+                <div class="order-chat" id="order-chat" aria-live="polite" data-feed-url="{% url 'order_messages_feed' order.pk %}" data-last-message-id="{{ last_message_id }}">
                     {% for message in order_messages %}
                         <article class="order-message{% if message.sender_id == user.id %} mine{% endif %}">
                             <div class="order-message-meta">
                                 <strong>{{ message.sender_profile.business_name|default:message.sender.business_name|default:message.sender.username }}</strong>
                                 · {{ message.created_at|date:"M j, Y, g:i a" }}
                             </div>
-                            <div>{{ message.body|linebreaksbr }}</div>
+                            <div class="order-message-body">{{ message.body|linebreaksbr }}</div>
                         </article>
                     {% empty %}
-                        <p class="text-muted text-center my-4">No messages yet. Send a message to start the conversation.</p>
+                        <p class="text-muted text-center my-4" data-empty-chat>No messages yet. Send a message to start the conversation.</p>
                     {% endfor %}
                 </div>
-                <form method="post" action="{% url 'send_order_message' order.pk %}" class="mt-3">
+                <div id="chat-send-error" class="alert alert-danger py-2 mt-3 d-none" role="alert"></div>
+                <form id="order-message-form" method="post" action="{% url 'send_order_message' order.pk %}" class="mt-3">
                     {% csrf_token %}
                     <label for="{{ message_form.body.id_for_label }}" class="form-label fw-semibold">Your message</label>
                     {{ message_form.body }}
                     {% for error in message_form.body.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
-                    <button type="submit" class="btn btn-gab mt-3">
+                    <button id="send-order-message" type="submit" class="btn btn-gab mt-3">
                         <i class="bi bi-send me-1" aria-hidden="true"></i>Send message
                     </button>
                 </form>
@@ -116,7 +206,11 @@
                         <button type="submit" class="btn btn-outline-primary w-100 mt-3">Save status</button>
                     </form>
                 {% else %}
-                    <p class="small text-muted mb-0">This order is {{ order.get_status_display|lower }} and has no further status changes.</p>
+                    {% if is_order_supplier %}
+                        <p class="small text-muted mb-0">This order is {{ order.get_status_display|lower }} and has no further status changes.</p>
+                    {% else %}
+                        <p class="small text-muted mb-0">The supplier manages this order’s status. You can message them here if you need an update.</p>
+                    {% endif %}
                 {% endif %}
             </section>
         </div>
@@ -127,6 +221,173 @@
 {% block extra_js %}
 <script>
     const orderChat = document.getElementById('order-chat');
-    orderChat.scrollTop = orderChat.scrollHeight;
+    const chatForm = document.getElementById('order-message-form');
+    const chatStatus = document.getElementById('chat-connection-status');
+    const chatError = document.getElementById('chat-send-error');
+    const sendButton = document.getElementById('send-order-message');
+    let lastMessageId = Number(orderChat.dataset.lastMessageId || 0);
+
+    const scrollChatToBottom = () => {
+        orderChat.scrollTop = orderChat.scrollHeight;
+    };
+
+    const appendOrderMessage = (message) => {
+        if (!message || Number(message.id) <= lastMessageId) return;
+        const shouldStickToBottom =
+            orderChat.scrollHeight - orderChat.scrollTop - orderChat.clientHeight < 90
+            || message.is_mine;
+        orderChat.querySelector('[data-empty-chat]')?.remove();
+
+        const article = document.createElement('article');
+        article.className = `order-message${message.is_mine ? ' mine' : ''}`;
+        const meta = document.createElement('div');
+        meta.className = 'order-message-meta';
+        const sender = document.createElement('strong');
+        sender.textContent = message.sender_name;
+        const time = document.createElement('span');
+        time.textContent = ` · ${new Intl.DateTimeFormat(undefined, {
+            dateStyle: 'medium', timeStyle: 'short'
+        }).format(new Date(message.created_at))}`;
+        meta.append(sender, time);
+        const body = document.createElement('div');
+        body.className = 'order-message-body';
+        body.textContent = message.body;
+        article.append(meta, body);
+        orderChat.append(article);
+        lastMessageId = Number(message.id);
+        orderChat.dataset.lastMessageId = String(lastMessageId);
+        if (shouldStickToBottom) scrollChatToBottom();
+    };
+
+    const refreshOrderMessages = async () => {
+        if (document.hidden) return;
+        try {
+            const response = await fetch(
+                `${orderChat.dataset.feedUrl}?after=${lastMessageId}`,
+                { headers: { Accept: 'application/json' }, credentials: 'same-origin' }
+            );
+            if (!response.ok) throw new Error('Chat refresh failed');
+            const data = await response.json();
+            data.messages.forEach(appendOrderMessage);
+            chatStatus.textContent = 'Live · checks for new messages every 3 seconds';
+            chatStatus.classList.remove('text-danger');
+            chatStatus.classList.add('text-success');
+        } catch (error) {
+            chatStatus.textContent = 'Reconnecting to chat…';
+            chatStatus.classList.remove('text-success');
+            chatStatus.classList.add('text-danger');
+        }
+    };
+
+    chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        chatError.classList.add('d-none');
+        sendButton.disabled = true;
+        try {
+            const response = await fetch(chatForm.action, {
+                method: 'POST',
+                body: new FormData(chatForm),
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                const errors = Object.values(data.errors || {}).flat().map((error) => error.message);
+                throw new Error(errors.join(' ') || 'Your message could not be sent.');
+            }
+            appendOrderMessage(data.message);
+            chatForm.reset();
+            chatStatus.textContent = 'Live · checks for new messages every 3 seconds';
+            chatStatus.classList.remove('text-danger');
+            chatStatus.classList.add('text-success');
+        } catch (error) {
+            chatError.textContent = error.message || 'Your message could not be sent. Please try again.';
+            chatError.classList.remove('d-none');
+        } finally {
+            sendButton.disabled = false;
+        }
+    });
+
+    scrollChatToBottom();
+    refreshOrderMessages();
+    window.setInterval(refreshOrderMessages, 3000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) refreshOrderMessages();
+    });
+
+
+    const onlinePaymentButton = document.getElementById('start-online-payment');
+    const onlinePaymentStatus = document.getElementById('online-payment-status');
+    if (onlinePaymentButton) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        const pollPayment = async () => {
+            const startedAt = Date.now();
+            onlinePaymentStatus.textContent = 'Waiting for GAB’s server confirmation. Do not pay again.';
+            while (Date.now() - startedAt < 90000) {
+                await new Promise((resolve) => window.setTimeout(resolve, 3000));
+                try {
+                    const response = await fetch(onlinePaymentButton.dataset.statusUrl, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const state = await response.json();
+                    if (state.payment_status === 'PAID' || state.payment_status === 'FAILED') {
+                        window.location.reload();
+                        return;
+                    }
+                } catch (error) {
+                    // Keep the user on the order; a delayed webhook can still update it.
+                }
+            }
+            onlinePaymentStatus.textContent = 'Still waiting for provider confirmation. Keep this order open and do not start another payment.';
+        };
+
+        onlinePaymentButton.addEventListener('click', async () => {
+            onlinePaymentButton.disabled = true;
+            onlinePaymentStatus.textContent = 'Preparing secure checkout…';
+            try {
+                const response = await fetch(onlinePaymentButton.dataset.startUrl, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) throw new Error(data.error || 'Checkout could not start.');
+                if (!window.Razorpay) {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                        script.onload = resolve;
+                        script.onerror = () => reject(new Error('Secure checkout could not load.'));
+                        document.head.appendChild(script);
+                    });
+                }
+                const checkout = new window.Razorpay({
+                    key: data.key_id,
+                    order_id: data.provider_order_id,
+                    amount: data.amount_paise,
+                    currency: data.currency,
+                    name: data.name,
+                    description: data.description,
+                    handler: () => { pollPayment(); },
+                    modal: { ondismiss: () => {
+                        onlinePaymentStatus.textContent = 'Checkout closed. If you completed payment, wait for server confirmation before trying again.';
+                        onlinePaymentButton.disabled = false;
+                    } }
+                });
+                checkout.on('payment.failed', () => { pollPayment(); });
+                checkout.open();
+                onlinePaymentStatus.textContent = 'Complete payment in the secure provider window.';
+                return;
+            } catch (error) {
+                onlinePaymentStatus.textContent = error.message || 'Checkout could not start.';
+            }
+            onlinePaymentButton.disabled = false;
+        });
+    }
+
 </script>
 {% endblock %}
