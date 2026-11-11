@@ -80,6 +80,8 @@ This page confirms the app’s consistent profile experience and role-aware iden
 
 Users are not limited to a single function. The project supports multiple assigned roles and one active role at a time.
 
+Each seller role keeps its own business name, contact details, and location. Account Settings edits the active role's profile, so switching between Shopkeeper and Wholesaler does not overwrite either business identity; buyer PIN settings remain separate.
+
 ### Nearby shop discovery
 
 Buyers can save a six-digit Indian PIN code and discover nearby shopkeepers based on approximate distance. This is a major part of the marketplace experience and is visible in the settings and market UI.
@@ -113,6 +115,10 @@ until there is sufficient order history.
 ### Product, banner, and image management
 
 Sellers can manage both product listings and promotional content. This includes product publishing, image asset handling, and banner-based business promotion, giving brands a more complete storefront profile.
+
+Shopkeeper and wholesaler image galleries are private to their owner. Only those
+roles can upload, edit, or delete their own gallery images; buyers and other
+suppliers cannot browse them, and buyers do not see gallery navigation.
 
 ### Orders, quotes, and enquiries
 

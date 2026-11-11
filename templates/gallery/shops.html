@@ -16,9 +16,9 @@
             <article class="card dashboard-card h-100 p-4">
                 <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                     <div>
-                        <h2 class="h5 fw-bold mb-1">{{ shop.business_name|default:shop.username }}</h2>
+                        <h2 class="h5 fw-bold mb-1">{{ shop.seller_profile.business_name|default:shop.business_name|default:shop.username }}</h2>
                         <p class="text-muted small mb-0">
-                            {% if shop.city or shop.state %}{{ shop.city }}{% if shop.city and shop.state %}, {% endif %}{{ shop.state }}{% else %}India{% endif %}
+                            {% if shop.seller_profile.city or shop.seller_profile.state or shop.city or shop.state %}{{ shop.seller_profile.city|default:shop.city }}{% if shop.seller_profile.city|default:shop.city and shop.seller_profile.state|default:shop.state %}, {% endif %}{{ shop.seller_profile.state|default:shop.state }}{% else %}India{% endif %}
                         </p>
                     </div>
                     {% if shop.shop_is_open %}

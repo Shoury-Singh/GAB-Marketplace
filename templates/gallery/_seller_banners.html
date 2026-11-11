@@ -16,7 +16,7 @@
             <a class="seller-banner-card" href="{{ banner.target_url }}" target="_blank" rel="noopener noreferrer">
                 <img src="{{ banner.image.url }}" alt="{{ banner.title }}">
                 <span class="seller-banner-copy">
-                    <span class="seller-banner-label">Sponsored · {{ banner.owner.business_name|default:banner.owner.username }}</span>
+                    <span class="seller-banner-label">Sponsored · {{ banner.seller_profile.business_name|default:banner.owner.business_name|default:banner.owner.username }}</span>
                     <strong>{{ banner.title }}</strong>
                     <span>Visit business <i class="bi bi-arrow-up-right" aria-hidden="true"></i></span>
                 </span>

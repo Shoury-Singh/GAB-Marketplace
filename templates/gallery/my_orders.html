@@ -32,9 +32,9 @@
                     <div class="d-flex flex-wrap gap-3 mt-3 text-muted small">
                         <span><i class="bi bi-box-seam me-1" aria-hidden="true"></i>{{ order.quantity }} units</span>
                         {% if order.buyer_id == user.id %}
-                            <span><i class="bi bi-shop me-1" aria-hidden="true"></i>{{ order.seller.business_name|default:order.seller.username }}</span>
+                            <span><i class="bi bi-shop me-1" aria-hidden="true"></i>{{ order.seller_profile.business_name|default:order.seller.business_name|default:order.seller.username }}</span>
                         {% else %}
-                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Buyer: {{ order.buyer.business_name|default:order.buyer.username }}</span>
+                            <span><i class="bi bi-person me-1" aria-hidden="true"></i>Buyer: {{ order.buyer_profile.business_name|default:order.buyer.business_name|default:order.buyer.username }}</span>
                         {% endif %}
                         <span><i class="bi bi-chat me-1" aria-hidden="true"></i>{{ order.message_count }} messages</span>
                     </div>

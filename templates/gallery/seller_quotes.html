@@ -12,7 +12,7 @@
                     <div class="d-flex justify-content-between align-items-start gap-3">
                         <div>
                             <h5 class="mb-1">{{ quote.product.name }}</h5>
-                            <p class="text-muted mb-2">From {{ quote.buyer.business_name|default:quote.buyer.username }} · Quantity: {{ quote.quantity }}</p>
+                            <p class="text-muted mb-2">From {{ quote.buyer_profile.business_name|default:quote.buyer.business_name|default:quote.buyer.username }} · Quantity: {{ quote.quantity }}</p>
                             {% if quote.message %}<p>{{ quote.message }}</p>{% endif %}
                         </div>
                         <span class="badge text-bg-secondary">{{ quote.get_status_display }}</span>

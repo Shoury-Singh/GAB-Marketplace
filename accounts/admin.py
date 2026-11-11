@@ -15,6 +15,8 @@ from .models import (
 class UserRoleInline(admin.TabularInline):
     model = UserRole
     extra = 0
+    fields = ('role', 'business_name', 'phone', 'address', 'city', 'state', 'pincode', 'created_at')
+    readonly_fields = ('created_at',)
 
 
 class RoleAccountDataAdmin(admin.ModelAdmin):

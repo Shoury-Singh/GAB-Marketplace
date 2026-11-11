@@ -17,6 +17,7 @@ from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 
+from accounts.business_profiles import business_profile_for, business_profiles_for
 from accounts.models import PincodeLocation
 
 from .models import Order, Product, ProductInteraction
@@ -155,10 +156,31 @@ def rank_products(products, user):
     )
 
     location_by_pincode = {}
-    buyer_pincode = getattr(user, 'pincode', None) if user.is_authenticated else None
+    buyer_profile = (
+        business_profile_for(user, user.role)
+        if user.is_authenticated
+        else None
+    )
+    buyer_pincode = (
+        buyer_profile.pincode if buyer_profile and buyer_profile.pincode
+        else getattr(user, 'pincode', None)
+    ) if user.is_authenticated else None
+    seller_profiles = business_profiles_for(
+        (item.owner_id, item.seller_role)
+        for item in candidates
+        if item.owner_id
+    )
     if buyer_pincode:
-        pincodes = {owner.pincode for owner in (item.owner for item in candidates)
-                    if owner and owner.pincode}
+        pincodes = {
+            profile.pincode
+            for profile in seller_profiles.values()
+            if profile.pincode
+        }
+        pincodes.update(
+            product.owner.pincode
+            for product in candidates
+            if product.owner and product.owner.pincode
+        )
         location_by_pincode = PincodeLocation.objects.in_bulk(pincodes, field_name='pincode')
         buyer_location = PincodeLocation.objects.filter(pincode=buyer_pincode).first()
     else:
@@ -212,8 +234,14 @@ def rank_products(products, user):
                 reasons.append('Fits your usual price range')
         if stock_reason:
             reasons.append(stock_reason)
-        if buyer_location and product.owner and product.owner.pincode:
-            seller_location = location_by_pincode.get(product.owner.pincode)
+        seller_profile = seller_profiles.get((product.owner_id, product.seller_role))
+        seller_pincode = (
+            seller_profile.pincode
+            if seller_profile and seller_profile.pincode
+            else product.owner.pincode if product.owner else None
+        )
+        if buyer_location and seller_pincode:
+            seller_location = location_by_pincode.get(seller_pincode)
             if seller_location:
                 km = distance_km(buyer_location, seller_location)
                 location_score = max(0, 8 - km / 100)

@@ -8,6 +8,7 @@ from django.db import connection
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
+from accounts.business_profiles import business_profiles_for
 from gallery.models import SellerBanner
 from gallery.views import serve_uploaded_media
 
@@ -15,12 +16,22 @@ def home_view(request):
     """Show attractive landing page for visitors, dashboard for logged-in users"""
     if request.user.is_authenticated:
         return redirect(request.user.get_dashboard_url())
+    banners = list(SellerBanner.objects.filter(
+        is_active=True,
+        owner__is_active=True,
+        seller_role='SHOPKEEPER',
+    ).select_related('owner')[:4])
+    profiles = business_profiles_for(
+        (banner.owner_id, banner.seller_role)
+        for banner in banners
+        if banner.owner_id
+    )
+    for banner in banners:
+        banner.seller_profile = profiles.get(
+            (banner.owner_id, banner.seller_role),
+        )
     return render(request, 'home.html', {
-        'banners': SellerBanner.objects.filter(
-            is_active=True,
-            owner__is_active=True,
-            seller_role='SHOPKEEPER',
-        ).select_related('owner')[:4],
+        'banners': banners,
     })
 
 

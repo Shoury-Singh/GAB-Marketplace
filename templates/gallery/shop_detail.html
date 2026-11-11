@@ -9,9 +9,9 @@
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
                 <p class="text-uppercase text-primary small fw-bold mb-1">Shopkeeper store</p>
-                <h1 class="h2 fw-bold mb-2">{{ shop.business_name|default:shop.username }}</h1>
+                <h1 class="h2 fw-bold mb-2">{{ shop.seller_profile.business_name|default:shop.business_name|default:shop.username }}</h1>
                 <p class="text-muted mb-0">
-                    {% if shop.city or shop.state %}{{ shop.city }}{% if shop.city and shop.state %}, {% endif %}{{ shop.state }}{% else %}India{% endif %}
+                    {% if shop.seller_profile.city or shop.seller_profile.state or shop.city or shop.state %}{{ shop.seller_profile.city|default:shop.city }}{% if shop.seller_profile.city|default:shop.city and shop.seller_profile.state|default:shop.state %}, {% endif %}{{ shop.seller_profile.state|default:shop.state }}{% else %}India{% endif %}
                     · India Standard Time
                 </p>
             </div>

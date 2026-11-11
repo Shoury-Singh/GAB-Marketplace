@@ -30,19 +30,19 @@
                         </div>
                         <div class="col-md-6">
                             <p class="text-muted mb-1">Business</p>
-                            <h5>{{ user_obj.business_name|default:'Not provided' }}</h5>
+                            <h5>{{ business_profile.business_name|default:user_obj.business_name|default:'Not provided' }}</h5>
                         </div>
                         <div class="col-md-6">
                             <p class="text-muted mb-1">Location</p>
-                            <h5>{{ user_obj.city|default:'Not provided' }}{% if user_obj.city and user_obj.state %}, {% endif %}{{ user_obj.state|default:'' }}</h5>
+                            <h5>{{ business_profile.city|default:user_obj.city|default:'Not provided' }}{% if business_profile.city or user_obj.city %}{% if business_profile.state or user_obj.state %}, {% endif %}{% endif %}{{ business_profile.state|default:user_obj.state|default:'' }}</h5>
                         </div>
                         <div class="col-md-6">
                             <p class="text-muted mb-1">PIN code</p>
-                            <h5>{{ user_obj.pincode|default:'Not provided' }}</h5>
+                            <h5>{{ business_profile.pincode|default:user_obj.pincode|default:'Not provided' }}</h5>
                         </div>
                         <div class="col-md-6">
                             <p class="text-muted mb-1">Phone</p>
-                            <h5>{{ user_obj.phone|default:'Not provided' }}</h5>
+                            <h5>{{ business_profile.phone|default:user_obj.phone|default:'Not provided' }}</h5>
                         </div>
                         <div class="col-md-6">
                             <p class="text-muted mb-1">Member since</p>

@@ -27,5 +27,6 @@ urlpatterns = [
     path('orders/<int:pk>/status/', views.update_order_status, name='update_order_status'),
     path('upload/', views.upload_image, name='upload_image'),
     path('my-images/', views.my_images, name='my_images'),
+    path('images/<int:pk>/edit/', views.edit_image, name='edit_image'),
     path('delete/<int:pk>/', views.delete_image, name='delete_image'),
 ]

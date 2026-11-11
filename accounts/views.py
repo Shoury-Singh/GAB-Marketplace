@@ -17,6 +17,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from .business_profiles import business_profiles_for
 from .forms import (
     AccountLocationForm,
     AddAccountRoleForm,
@@ -285,8 +286,13 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
+    business_profile = UserRole.objects.filter(
+        user=request.user,
+        role=request.user.role,
+    ).first()
     return render(request, 'accounts/profile.html', {
         'user_obj': request.user,
+        'business_profile': business_profile,
         'page_title': 'My Profile - GAB Platform'
     })
 
@@ -299,12 +305,24 @@ def account_settings_view(request):
         User.Role.WHOLESALER,
         User.Role.SHOPKEEPER,
     }
-    has_seller_role = bool(seller_roles.intersection(available_roles))
+    has_seller_role = request.user.role in seller_roles
+    active_role_assignment, _ = UserRole.objects.get_or_create(
+        user=request.user,
+        role=request.user.role,
+        defaults={
+            'business_name': request.user.business_name or '',
+            'phone': request.user.phone or '',
+            'address': request.user.address or '',
+            'city': request.user.city or '',
+            'state': request.user.state or '',
+            'pincode': request.user.pincode or '',
+        },
+    )
     add_role_form = AddAccountRoleForm(user=request.user)
     switch_role_form = SwitchAccountRoleForm(user=request.user)
     location_form = AccountLocationForm(instance=request.user)
     business_profile_form = (
-        SellerBusinessProfileForm(user=request.user, instance=request.user)
+        SellerBusinessProfileForm(instance=active_role_assignment)
         if has_seller_role
         else None
     )
@@ -317,32 +335,45 @@ def account_settings_view(request):
                 return redirect('account_settings')
             business_profile_form = SellerBusinessProfileForm(
                 request.POST,
-                user=request.user,
-                instance=request.user,
+                instance=active_role_assignment,
             )
             if business_profile_form.is_valid():
                 business_profile_form.save()
                 messages.success(request, 'Your business profile was updated.')
                 return redirect('account_settings')
         elif action == 'update-location':
+            if has_seller_role:
+                messages.error(request, 'Update this role location in the business profile form.')
+                return redirect('account_settings')
             location_form = AccountLocationForm(request.POST, instance=request.user)
             if location_form.is_valid():
                 location_form.save()
+                active_role_assignment.pincode = request.user.pincode or ''
+                active_role_assignment.save(update_fields=['pincode'])
                 messages.success(request, 'Your PIN code was updated.')
                 return redirect('account_settings')
         elif action == 'add-role':
             add_role_form = AddAccountRoleForm(request.POST, user=request.user)
             if add_role_form.is_valid():
                 role = add_role_form.cleaned_data['role']
+                business_name = (
+                    add_role_form.cleaned_data['business_name'].strip()
+                    or request.user.business_name
+                    or ''
+                )
                 _assignment, created = UserRole.objects.get_or_create(
                     user=request.user,
                     role=role,
+                    defaults={
+                        'business_name': business_name,
+                        'phone': request.user.phone or '',
+                        'address': request.user.address or '',
+                        'city': request.user.city or '',
+                        'state': request.user.state or '',
+                        'pincode': request.user.pincode or '',
+                    },
                 )
                 if created:
-                    business_name = add_role_form.cleaned_data['business_name'].strip()
-                    if business_name and not request.user.business_name:
-                        request.user.business_name = business_name
-                        request.user.save(update_fields=['business_name', 'updated_at'])
                     messages.success(
                         request,
                         f'{dict(User.Role.choices)[role]} was added to your account.',
@@ -449,10 +480,22 @@ def buyer_dashboard(request):
     if not request.user.is_buyer:
         messages.warning(request, "Access denied. This dashboard is only for Buyer users.")
         return redirect(request.user.get_dashboard_url())
+    quote_requests = list(
+        QuoteRequest.objects.filter(
+            buyer=request.user,
+        ).select_related('product', 'seller')[:5]
+    )
+    seller_profiles = business_profiles_for(
+        (quote.seller_id, quote.product.seller_role)
+        for quote in quote_requests
+        if quote.seller_id
+    )
+    for quote in quote_requests:
+        quote.seller_profile = seller_profiles.get(
+            (quote.seller_id, quote.product.seller_role),
+        )
     return render(request, 'accounts/dashboards/buyer.html', {
         'page_title': 'Buyer Dashboard - GAB',
-        'quote_requests': QuoteRequest.objects.filter(
-            buyer=request.user,
-        ).select_related('product', 'seller')[:5],
+        'quote_requests': quote_requests,
         'quote_request_count': QuoteRequest.objects.filter(buyer=request.user).count(),
     })

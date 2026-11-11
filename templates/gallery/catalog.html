@@ -395,9 +395,9 @@
                         {% endif %}
                         {% if product.owner %}
                             <div class="product-meta">
-                                {{ product.owner.business_name|default:product.owner.username }} ·
-                                {% if product.owner.city or product.owner.state %}
-                                    {{ product.owner.city }}{% if product.owner.city and product.owner.state %}, {% endif %}{{ product.owner.state }}
+                                {{ product.seller_profile.business_name|default:product.owner.business_name|default:product.owner.username }} ·
+                                {% if product.seller_profile.city or product.seller_profile.state or product.owner.city or product.owner.state %}
+                                    {{ product.seller_profile.city|default:product.owner.city }}{% if product.seller_profile.city|default:product.owner.city and product.seller_profile.state|default:product.owner.state %}, {% endif %}{{ product.seller_profile.state|default:product.owner.state }}
                                 {% else %}
                                     {{ product.location }}
                                 {% endif %}

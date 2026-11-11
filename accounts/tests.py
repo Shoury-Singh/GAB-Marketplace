@@ -254,6 +254,10 @@ class AccountRoleManagementTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.role, User.Role.BUYER)
         self.assertEqual(self.user.phone, '5551234567')
+        self.assertEqual(
+            self.user.role_assignments.get(role=User.Role.WHOLESALER).business_name,
+            'Northside Wholesale',
+        )
 
         response = self.client.post(settings_url, {
             'action': 'switch-role',
@@ -350,12 +354,14 @@ class SellerBusinessProfileTests(TestCase):
 
         self.assertRedirects(response, reverse('account_settings'))
         self.seller.refresh_from_db()
-        self.assertEqual(self.seller.business_name, 'New Supplier Shop')
-        self.assertEqual(self.seller.phone, '9876543210')
-        self.assertEqual(self.seller.address, '12 Market Road')
-        self.assertEqual(self.seller.city, 'New City')
-        self.assertEqual(self.seller.state, 'Gujarat')
-        self.assertEqual(self.seller.pincode, '395007')
+        shop_profile = self.seller.role_assignments.get(role=User.Role.SHOPKEEPER)
+        self.assertEqual(self.seller.business_name, 'Old Shop Name')
+        self.assertEqual(shop_profile.business_name, 'New Supplier Shop')
+        self.assertEqual(shop_profile.phone, '9876543210')
+        self.assertEqual(shop_profile.address, '12 Market Road')
+        self.assertEqual(shop_profile.city, 'New City')
+        self.assertEqual(shop_profile.state, 'Gujarat')
+        self.assertEqual(shop_profile.pincode, '395007')
 
         self.client.force_login(self.buyer)
         catalog_response = self.client.get(
@@ -372,6 +378,47 @@ class SellerBusinessProfileTests(TestCase):
             self.client.get(reverse('request_quote', args=[self.product.slug])),
             'New Supplier Shop',
         )
+        self.assertContains(self.client.get(reverse('shops')), 'New City')
+
+    def test_seller_roles_keep_independent_business_profiles(self):
+        shop_profile = self.seller.role_assignments.get(role=User.Role.SHOPKEEPER)
+        wholesale_profile = UserRole.objects.create(
+            user=self.seller,
+            role=User.Role.WHOLESALER,
+            business_name='Wholesale Division',
+            city='Wholesale City',
+            state='Maharashtra',
+            pincode='400001',
+        )
+        self.client.force_login(self.seller)
+
+        self.client.post(reverse('account_settings'), {
+            'action': 'switch-role',
+            'role': User.Role.WHOLESALER,
+        })
+        response = self.client.get(reverse('account_settings'))
+
+        self.assertEqual(
+            response.context['business_profile_form']['business_name'].value(),
+            'Wholesale Division',
+        )
+        self.client.post(reverse('account_settings'), {
+            'action': 'update-business-profile',
+            'business_name': 'Updated Wholesale Division',
+            'phone': '9876543210',
+            'address': 'Wholesale Road',
+            'city': 'New Wholesale City',
+            'state': 'Maharashtra',
+            'pincode': '400002',
+        })
+
+        shop_profile.refresh_from_db()
+        wholesale_profile.refresh_from_db()
+        self.assertEqual(shop_profile.business_name, 'Old Shop Name')
+        self.assertEqual(shop_profile.pincode, '395001')
+        self.assertEqual(wholesale_profile.business_name, 'Updated Wholesale Division')
+        self.assertEqual(wholesale_profile.city, 'New Wholesale City')
+        self.assertEqual(wholesale_profile.pincode, '400002')
 
     def test_invalid_pin_preserves_profile_and_buyers_cannot_edit_seller_profile(self):
         self.client.force_login(self.seller)
@@ -390,6 +437,10 @@ class SellerBusinessProfileTests(TestCase):
         self.seller.refresh_from_db()
         self.assertEqual(self.seller.business_name, 'Old Shop Name')
         self.assertEqual(self.seller.pincode, '395001')
+        self.assertEqual(
+            self.seller.role_assignments.get(role=User.Role.SHOPKEEPER).business_name,
+            'Old Shop Name',
+        )
 
         self.client.force_login(self.buyer)
         response = self.client.post(reverse('account_settings'), {
@@ -441,6 +492,10 @@ class PincodeAccountTests(TestCase):
         self.assertRedirects(response, reverse('account_settings'))
         buyer.refresh_from_db()
         self.assertEqual(buyer.pincode, '395007')
+        self.assertEqual(
+            buyer.role_assignments.get(role=User.Role.BUYER).pincode,
+            '395007',
+        )
 
         response = self.client.post(reverse('account_settings'), {
             'action': 'update-location',

@@ -6,7 +6,7 @@
 <div class="container py-5">
     <div class="card auth-card">
         <div class="auth-header">
-            <h2 class="mb-1">Upload image</h2>
+            <h2 class="mb-1">{% if image %}Edit image{% else %}Upload image{% endif %}</h2>
             <p class="mb-0 opacity-75">Showcase your business</p>
         </div>
         <div class="card-body p-4 p-lg-5">
@@ -27,8 +27,8 @@
                 {% endfor %}
 
                 <div class="d-flex gap-3">
-                    <button type="submit" class="btn btn-gab">Upload</button>
-                    <a href="{% url 'images_show' %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-gab">{% if image %}Save changes{% else %}Upload{% endif %}</button>
+                    <a href="{% url 'my_images' %}" class="btn btn-outline-secondary">Cancel</a>
                 </div>
             </form>
         </div>

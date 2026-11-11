@@ -45,7 +45,18 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        UserRole.objects.get_or_create(user_id=self.pk, role=self.role)
+        UserRole.objects.get_or_create(
+            user_id=self.pk,
+            role=self.role,
+            defaults={
+                'business_name': self.business_name or '',
+                'phone': self.phone or '',
+                'address': self.address or '',
+                'city': self.city or '',
+                'state': self.state or '',
+                'pincode': self.pincode or '',
+            },
+        )
 
     class Meta:
         verbose_name = _('user')
@@ -99,6 +110,16 @@ class UserRole(models.Model):
         related_name='role_assignments',
     )
     role = models.CharField(max_length=20, choices=User.Role.choices)
+    business_name = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=15, blank=True)
+    address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    pincode = models.CharField(
+        max_length=10,
+        blank=True,
+        validators=[indian_pincode_validator],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -11,7 +11,7 @@
         <h1 class="h3 fw-bold mb-2">Place an order request</h1>
         <p class="text-muted mb-4">
             Request <strong>{{ product.name }}</strong> from
-            {{ product.owner.business_name|default:product.owner.username }}.
+            {{ seller_profile.business_name|default:product.owner.business_name|default:product.owner.username }}.
             You can discuss payment, delivery, and customizations in the order chat.
         </p>
 

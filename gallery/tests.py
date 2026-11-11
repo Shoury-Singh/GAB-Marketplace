@@ -391,6 +391,78 @@ class MarketplaceFlowTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertTrue(GalleryImage.objects.filter(pk=image.pk).exists())
 
+    def test_gallery_and_uploads_are_private_to_shopkeepers_and_wholesalers(self):
+        own_image = GalleryImage.objects.create(
+            title='Shop display',
+            image='gallery/shop-display.jpg',
+            uploaded_by=self.seller,
+        )
+        other_seller = User.objects.create_user(
+            username='gallery-wholesaler',
+            password='test-password-123',
+            role=User.Role.WHOLESALER,
+        )
+        other_image = GalleryImage.objects.create(
+            title='Wholesale stock',
+            image='gallery/wholesale-stock.jpg',
+            uploaded_by=other_seller,
+        )
+
+        self.client.force_login(self.seller)
+        self.assertRedirects(
+            self.client.get(reverse('images_show')),
+            reverse('my_images'),
+        )
+        response = self.client.get(reverse('my_images'))
+        self.assertContains(response, own_image.title)
+        self.assertNotContains(response, other_image.title)
+
+        self.client.force_login(self.buyer)
+        self.assertRedirects(
+            self.client.get(reverse('images_show')),
+            reverse('buyer_dashboard'),
+        )
+        self.assertRedirects(
+            self.client.get(reverse('my_images')),
+            reverse('buyer_dashboard'),
+        )
+        self.assertRedirects(
+            self.client.get(reverse('upload_image')),
+            reverse('buyer_dashboard'),
+        )
+        dashboard = self.client.get(reverse('buyer_dashboard'))
+        self.assertNotContains(dashboard, 'My Images')
+        self.assertNotContains(dashboard, '>Gallery<')
+
+    def test_shopkeeper_can_edit_only_their_own_gallery_image(self):
+        image = GalleryImage.objects.create(
+            title='Shop front',
+            image='gallery/shop-front.jpg',
+            uploaded_by=self.seller,
+        )
+        self.client.force_login(self.seller)
+
+        response = self.client.post(
+            reverse('edit_image', args=[image.pk]),
+            {'title': 'Updated shop front', 'description': 'New storefront photo'},
+        )
+
+        self.assertRedirects(response, reverse('my_images'))
+        image.refresh_from_db()
+        self.assertEqual(image.title, 'Updated shop front')
+        self.assertEqual(image.description, 'New storefront photo')
+
+        other_seller = User.objects.create_user(
+            username='image-wholesaler',
+            password='test-password-123',
+            role=User.Role.WHOLESALER,
+        )
+        self.client.force_login(other_seller)
+        self.assertEqual(
+            self.client.get(reverse('edit_image', args=[image.pk])).status_code,
+            404,
+        )
+
     def test_seller_can_create_and_publish_banner(self):
         image_buffer = BytesIO()
         Image.new('RGB', (40, 20), color='green').save(image_buffer, format='PNG')

@@ -54,8 +54,8 @@
                 <p class="text-uppercase text-primary small fw-bold mb-1">Order #{{ order.pk }}</p>
                 <h1 class="h3 fw-bold mb-2">{{ order.product.name }}</h1>
                 <div class="text-muted">
-                    {{ order.quantity }} units · Buyer: {{ order.buyer.business_name|default:order.buyer.username }}
-                    · Supplier: {{ order.seller.business_name|default:order.seller.username }}
+                    {{ order.quantity }} units · Buyer: {{ order.buyer_profile.business_name|default:order.buyer.business_name|default:order.buyer.username }}
+                    · Supplier: {{ order.seller_profile.business_name|default:order.seller.business_name|default:order.seller.username }}
                 </div>
             </div>
             <span class="badge text-bg-primary fs-6">{{ order.get_status_display }}</span>
@@ -78,7 +78,7 @@
                     {% for message in order_messages %}
                         <article class="order-message{% if message.sender_id == user.id %} mine{% endif %}">
                             <div class="order-message-meta">
-                                <strong>{{ message.sender.business_name|default:message.sender.username }}</strong>
+                                <strong>{{ message.sender_profile.business_name|default:message.sender.business_name|default:message.sender.username }}</strong>
                                 · {{ message.created_at|date:"M j, Y, g:i a" }}
                             </div>
                             <div>{{ message.body|linebreaksbr }}</div>

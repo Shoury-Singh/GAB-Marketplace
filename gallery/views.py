@@ -6,13 +6,14 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import SuspiciousFileOperation
-from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Q
+from django.db.models.query import QuerySet
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils._os import safe_join
 from django.views.decorators.http import require_POST
+from accounts.business_profiles import business_profile_for, business_profiles_for
 from accounts.models import PincodeLocation, User
 from .models import (
     GalleryImage,
@@ -50,6 +51,10 @@ SELLER_BUYER_ROLES = {
     Product.SellerRole.INDUSTRY: User.Role.WHOLESALER,
     Product.SellerRole.WHOLESALER: User.Role.SHOPKEEPER,
     Product.SellerRole.SHOPKEEPER: User.Role.BUYER,
+}
+IMAGE_MANAGER_ROLES = {
+    User.Role.WHOLESALER,
+    User.Role.SHOPKEEPER,
 }
 
 
@@ -93,24 +98,82 @@ def _seller_required(request):
     return True
 
 
+def _attach_seller_profiles(items):
+    is_queryset = isinstance(items, QuerySet)
+    item_list = list(items)
+    profiles = business_profiles_for(
+        (item.owner_id, item.seller_role)
+        for item in item_list
+        if item.owner_id
+    )
+    for item in item_list:
+        item.seller_profile = profiles.get((item.owner_id, item.seller_role))
+    return items if is_queryset else item_list
+
+
+def _attach_quote_profiles(quotes):
+    quote_list = list(quotes)
+    profile_pairs = set()
+    for quote in quote_list:
+        seller_role = quote.product.seller_role
+        buyer_role = SELLER_BUYER_ROLES.get(seller_role)
+        if quote.seller_id:
+            profile_pairs.add((quote.seller_id, seller_role))
+        if quote.buyer_id and buyer_role:
+            profile_pairs.add((quote.buyer_id, buyer_role))
+
+    profiles = business_profiles_for(profile_pairs)
+    for quote in quote_list:
+        seller_role = quote.product.seller_role
+        buyer_role = SELLER_BUYER_ROLES.get(seller_role)
+        quote.seller_profile = profiles.get((quote.seller_id, seller_role))
+        quote.buyer_profile = (
+            profiles.get((quote.buyer_id, buyer_role))
+            if buyer_role
+            else None
+        )
+    return quote_list
+
+
+def _attach_order_profiles(orders):
+    order_list = list(orders)
+    profile_pairs = set()
+    for order in order_list:
+        seller_role = order.product.seller_role
+        buyer_role = SELLER_BUYER_ROLES.get(seller_role)
+        if order.seller_id:
+            profile_pairs.add((order.seller_id, seller_role))
+        if order.buyer_id and buyer_role:
+            profile_pairs.add((order.buyer_id, buyer_role))
+
+    profiles = business_profiles_for(profile_pairs)
+    for order in order_list:
+        seller_role = order.product.seller_role
+        buyer_role = SELLER_BUYER_ROLES.get(seller_role)
+        order.seller_profile = profiles.get((order.seller_id, seller_role))
+        order.buyer_profile = (
+            profiles.get((order.buyer_id, buyer_role))
+            if buyer_role
+            else None
+        )
+    return order_list
+
+
+def _image_manager_required(request):
+    if request.user.role not in IMAGE_MANAGER_ROLES:
+        messages.warning(
+            request,
+            'Image management is only available to shopkeepers and wholesalers.',
+        )
+        return False
+    return True
+
+
+@login_required
 def images_show(request):
-    """
-    Public Images Show Page.
-    Displays all active gallery images in a responsive grid.
-    """
-    images_list = GalleryImage.objects.filter(is_active=True).select_related('uploaded_by')
-
-    paginator = Paginator(images_list, 12)  # 12 images per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    context = {
-        'page_obj': page_obj,
-        'images': page_obj,
-        'total_images': images_list.count(),
-        'page_title': 'Images Gallery - GAB Platform'
-    }
-    return render(request, 'gallery/images_show.html', context)
+    if not _image_manager_required(request):
+        return redirect(request.user.get_dashboard_url())
+    return redirect('my_images')
 
 
 def catalog_view(request):
@@ -142,23 +205,29 @@ def catalog_view(request):
         if not request.user.is_authenticated:
             products = Product.objects.none()
             location_message = 'Sign in and add your PIN code in Settings to sort nearby shops.'
-        elif not request.user.pincode:
-            products = Product.objects.none()
-            location_message = 'Add your six-digit PIN code in Settings to sort nearby shops.'
         else:
-            buyer_location = PincodeLocation.objects.filter(
-                pincode=request.user.pincode,
-            ).first()
-            if buyer_location is None:
+            buyer_profile = business_profile_for(request.user, User.Role.BUYER)
+            buyer_pincode = (
+                buyer_profile.pincode if buyer_profile and buyer_profile.pincode
+                else request.user.pincode
+            )
+            if not buyer_pincode:
                 products = Product.objects.none()
-                location_message = (
-                    'Your PIN code is not available in the local postal map data yet.'
-                )
+                location_message = 'Add your six-digit PIN code in Settings to sort nearby shops.'
             else:
-                products = products.filter(
-                    inventory__gte=F('minimum_order'),
-                    owner__is_active=True,
-                )
+                buyer_location = PincodeLocation.objects.filter(
+                    pincode=buyer_pincode,
+                ).first()
+                if buyer_location is None:
+                    products = Product.objects.none()
+                    location_message = (
+                        'Your PIN code is not available in the local postal map data yet.'
+                    )
+                else:
+                    products = products.filter(
+                        inventory__gte=F('minimum_order'),
+                        owner__is_active=True,
+                    )
 
     if category != 'all':
         products = products.filter(category=category)
@@ -172,26 +241,50 @@ def catalog_view(request):
             | Q(owner__business_name__icontains=query)
             | Q(owner__city__icontains=query)
             | Q(owner__state__icontains=query)
+            | Q(owner__role_assignments__role=seller_role,
+                owner__role_assignments__business_name__icontains=query)
+            | Q(owner__role_assignments__role=seller_role,
+                owner__role_assignments__city__icontains=query)
+            | Q(owner__role_assignments__role=seller_role,
+                owner__role_assignments__state__icontains=query)
         )
 
     if sort == 'nearest' and buyer_location is not None:
         product_list = list(products)
+        product_profiles = business_profiles_for(
+            (product.owner_id, product.seller_role)
+            for product in product_list
+            if product.owner_id
+        )
         seller_pincodes = {
+            profile.pincode
+            for profile in product_profiles.values()
+            if profile.pincode
+        }
+        seller_pincodes.update(
             product.owner.pincode
             for product in product_list
             if product.owner and product.owner.pincode
-        }
+        )
         seller_locations = PincodeLocation.objects.in_bulk(
             seller_pincodes,
             field_name='pincode',
         )
         located_products = []
         for product in product_list:
+            seller_profile = product_profiles.get(
+                (product.owner_id, product.seller_role),
+            )
             seller_location = seller_locations.get(
-                product.owner.pincode if product.owner else None,
+                (
+                    seller_profile.pincode
+                    if seller_profile and seller_profile.pincode
+                    else product.owner.pincode if product.owner else None
+                ),
             )
             if seller_location is None:
                 continue
+            product.seller_profile = seller_profile
             product.distance_km = round(
                 distance_km(buyer_location, seller_location),
                 1,
@@ -216,6 +309,14 @@ def catalog_view(request):
     else:
         products = rank_products(products, request.user)
 
+    products = _attach_seller_profiles(products)
+    banners = _attach_seller_profiles(
+        SellerBanner.objects.filter(
+            is_active=True,
+            owner__is_active=True,
+            seller_role=seller_role,
+        ).select_related('owner')[:4]
+    )
     category_counts = {}
     if seller_role:
         category_counts = {
@@ -228,11 +329,7 @@ def catalog_view(request):
     categories = [choice[0] for choice in Product.Category.choices]
     context = {
         'products': products,
-        'banners': SellerBanner.objects.filter(
-            is_active=True,
-            owner__is_active=True,
-            seller_role=seller_role,
-        ).select_related('owner')[:4],
+        'banners': banners,
         'categories': categories,
         'category_options': [
             {'value': category, 'count': category_counts.get(category, 0)}
@@ -254,7 +351,7 @@ def shops_view(request):
     shops = User.objects.filter(is_active=True).filter(
         Q(role=User.Role.SHOPKEEPER)
         | Q(role_assignments__role=User.Role.SHOPKEEPER)
-    ).annotate(
+    ).distinct().annotate(
         active_product_count=Count(
             'products',
             filter=Q(
@@ -264,6 +361,12 @@ def shops_view(request):
             distinct=True,
         ),
     ).order_by('business_name', 'username')
+    shops = list(shops)
+    profiles = business_profiles_for(
+        (shop.pk, User.Role.SHOPKEEPER) for shop in shops
+    )
+    for shop in shops:
+        shop.seller_profile = profiles.get((shop.pk, User.Role.SHOPKEEPER))
     return render(request, 'gallery/shops.html', {
         'shops': shops,
         'page_title': 'Explore Shops - GAB',
@@ -283,10 +386,16 @@ def shop_detail(request, pk):
         seller_role=Product.SellerRole.SHOPKEEPER,
         is_active=True,
     )
+    products = _attach_seller_profiles(products)
+    shop.seller_profile = business_profile_for(shop, User.Role.SHOPKEEPER)
     return render(request, 'gallery/shop_detail.html', {
         'shop': shop,
         'products': products,
-        'page_title': f'{shop.business_name or shop.username} - GAB Shop',
+        'page_title': (
+            f'{shop.seller_profile.business_name or shop.username} - GAB Shop'
+            if shop.seller_profile
+            else f'{shop.username} - GAB Shop'
+        ),
     })
 
 
@@ -296,6 +405,7 @@ def product_detail(request, slug):
         slug=slug,
         is_active=True,
     )
+    _attach_seller_profiles([product])
     buyer_role = getattr(request.user, 'role', User.Role.BUYER)
     allowed_seller_role = BUYER_SELLER_ROLES.get(buyer_role)
     if product.owner_id != getattr(request.user, 'pk', None) and (
@@ -330,6 +440,7 @@ def product_detail(request, slug):
         category=product.category,
         seller_role=product.seller_role,
     ).exclude(pk=product.pk)[:4]
+    related_products = _attach_seller_profiles(related_products)
     return render(request, 'gallery/product_detail.html', {
         'product': product,
         'related_products': related_products,
@@ -421,9 +532,20 @@ def create_product(request):
         if form.is_valid():
             product = form.save(commit=False)
             product.owner = request.user
-            product.supplier = request.user.business_name or request.user.username
-            city_state = ', '.join(filter(None, [request.user.city, request.user.state]))
-            product.location = city_state or 'India'
+            profile = business_profile_for(request.user, request.user.role)
+            product.supplier = (
+                (profile.business_name if profile else '')
+                or request.user.business_name
+                or request.user.username
+            )[:120]
+            city_state = ', '.join(filter(
+                None,
+                [
+                    (profile.city if profile else '') or request.user.city,
+                    (profile.state if profile else '') or request.user.state,
+                ],
+            ))
+            product.location = (city_state or 'India')[:120]
             product.save()
             messages.success(request, f'{product.name} is now listed in the catalog.')
             return redirect('my_products')
@@ -475,6 +597,7 @@ def request_quote(request, slug):
         slug=slug,
         is_active=True,
     )
+    _attach_seller_profiles([product])
     if product.owner is None:
         messages.error(request, 'This listing has no seller account to receive a quote request.')
         return redirect('product_detail', slug=product.slug)
@@ -516,6 +639,7 @@ def request_quote(request, slug):
     return render(request, 'gallery/request_quote.html', {
         'form': form,
         'product': product,
+        'seller_profile': product.seller_profile,
         'page_title': f'Request a Quote - {product.name}',
     })
 
@@ -525,6 +649,7 @@ def buyer_quotes(request):
     quotes = QuoteRequest.objects.filter(
         buyer=request.user,
     ).select_related('product', 'seller')
+    quotes = _attach_quote_profiles(quotes)
     return render(request, 'gallery/buyer_quotes.html', {
         'quotes': quotes,
         'page_title': 'My Quote Requests - GAB',
@@ -538,6 +663,7 @@ def seller_quotes(request):
     quotes = QuoteRequest.objects.filter(
         seller=request.user,
     ).select_related('product', 'buyer')
+    quotes = _attach_quote_profiles(quotes)
     return render(request, 'gallery/seller_quotes.html', {
         'quotes': quotes,
         'page_title': 'Incoming Quote Requests - GAB',
@@ -593,6 +719,7 @@ def create_order(request, slug):
         slug=slug,
         is_active=True,
     )
+    _attach_seller_profiles([product])
     if product.owner is None:
         messages.error(request, 'This listing has no supplier account to receive an order.')
         return redirect('product_detail', slug=product.slug)
@@ -625,6 +752,7 @@ def create_order(request, slug):
     return render(request, 'gallery/order_form.html', {
         'form': form,
         'product': product,
+        'seller_profile': product.seller_profile,
         'page_title': f'Place Order - {product.name}',
     })
 
@@ -652,6 +780,7 @@ def my_orders(request):
     orders = orders.select_related('product', 'buyer', 'seller').annotate(
         message_count=Count('messages'),
     )
+    orders = _attach_order_profiles(orders)
     return render(request, 'gallery/my_orders.html', {
         'orders': orders,
         'heading': heading,
@@ -686,6 +815,29 @@ def set_shop_status(request):
 @login_required
 def order_detail(request, pk):
     order = _get_participant_order(request, pk)
+    order = _attach_order_profiles([order])[0]
+    order_messages = list(order.messages.select_related('sender'))
+    message_profiles = business_profiles_for(
+        (
+            message.sender_id,
+            (
+                order.product.seller_role
+                if message.sender_id == order.seller_id
+                else SELLER_BUYER_ROLES.get(order.product.seller_role)
+            ),
+        )
+        for message in order_messages
+        if message.sender_id
+    )
+    for message in order_messages:
+        sender_role = (
+            order.product.seller_role
+            if message.sender_id == order.seller_id
+            else SELLER_BUYER_ROLES.get(order.product.seller_role)
+        )
+        message.sender_profile = message_profiles.get(
+            (message.sender_id, sender_role),
+        )
     allowed_statuses = _allowed_order_statuses(order, request.user)
     status_form = (
         OrderStatusForm(allowed_statuses=allowed_statuses)
@@ -693,7 +845,7 @@ def order_detail(request, pk):
     )
     return render(request, 'gallery/order_detail.html', {
         'order': order,
-        'order_messages': order.messages.select_related('sender'),
+        'order_messages': order_messages,
         'message_form': OrderMessageForm(),
         'status_form': status_form,
         'page_title': f'Order #{order.pk} - GAB',
@@ -758,7 +910,10 @@ def update_order_status(request, pk):
     return redirect('order_detail', pk=order.pk)
 
 
+@login_required
 def upload_image(request):
+    if not _image_manager_required(request):
+        return redirect(request.user.get_dashboard_url())
     if request.method == 'POST':
         form = GalleryImageForm(request.POST, request.FILES)
         if form.is_valid():
@@ -767,9 +922,9 @@ def upload_image(request):
             img.save()
             messages.success(
                 request,
-                f'Image "{img.title}" uploaded successfully and is now visible on the Images page!'
+                f'Image "{img.title}" uploaded successfully.'
             )
-            return redirect('images_show')
+            return redirect('my_images')
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
@@ -784,6 +939,8 @@ def upload_image(request):
 
 @login_required
 def my_images(request):
+    if not _image_manager_required(request):
+        return redirect(request.user.get_dashboard_url())
     my_imgs = GalleryImage.objects.filter(uploaded_by=request.user)
     context = {
         'images': my_imgs,
@@ -793,9 +950,31 @@ def my_images(request):
 
 
 @login_required
+def edit_image(request, pk):
+    if not _image_manager_required(request):
+        return redirect(request.user.get_dashboard_url())
+    image = get_object_or_404(GalleryImage, pk=pk, uploaded_by=request.user)
+    if request.method == 'POST':
+        form = GalleryImageForm(request.POST, request.FILES, instance=image)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Image "{image.title}" was updated.')
+            return redirect('my_images')
+    else:
+        form = GalleryImageForm(instance=image)
+    return render(request, 'gallery/upload_image.html', {
+        'form': form,
+        'image': image,
+        'page_title': f'Edit {image.title} - GAB Platform',
+    })
+
+
+@login_required
 @require_POST
 def delete_image(request, pk):
     img = get_object_or_404(GalleryImage, pk=pk, uploaded_by=request.user)
+    if not _image_manager_required(request):
+        return redirect(request.user.get_dashboard_url())
     title = img.title
     img.delete()
     messages.success(request, f'Image "{title}" deleted successfully.')

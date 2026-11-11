@@ -23,10 +23,13 @@
                     {% if image.description %}<p class="text-muted small">{{ image.description }}</p>{% endif %}
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <span class="badge bg-light text-dark">{{ image.is_active|yesno:'Active,Inactive' }}</span>
-                        <form method="post" action="{% url 'delete_image' image.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                        </form>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'edit_image' image.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <form method="post" action="{% url 'delete_image' image.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

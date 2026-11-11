@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from .models import User
+from .models import User, UserRole
 
 
 class UserRegistrationForm(UserCreationForm):
@@ -112,7 +112,7 @@ class AccountLocationForm(forms.ModelForm):
 
 class SellerBusinessProfileForm(forms.ModelForm):
     class Meta:
-        model = User
+        model = UserRole
         fields = [
             'business_name',
             'phone',
@@ -161,18 +161,11 @@ class SellerBusinessProfileForm(forms.ModelForm):
             }),
         }
 
-    def __init__(self, *args, user, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        seller_roles = {
-            User.Role.INDUSTRY,
-            User.Role.WHOLESALER,
-            User.Role.SHOPKEEPER,
-        }
-        self.fields['business_name'].required = bool(
-            seller_roles.intersection(user.get_available_roles())
-        )
+        self.fields['business_name'].required = True
         self.fields['pincode'].help_text = (
-            'Used for approximate supplier distance and nearby discovery.'
+            'Used for supplier location and nearby discovery in this role.'
         )
 
 
