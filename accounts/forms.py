@@ -110,6 +110,72 @@ class AccountLocationForm(forms.ModelForm):
         return self.cleaned_data.get('pincode') or None
 
 
+class SellerBusinessProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = [
+            'business_name',
+            'phone',
+            'address',
+            'city',
+            'state',
+            'pincode',
+        ]
+        labels = {
+            'business_name': 'Shop / business name',
+            'phone': 'Business phone',
+            'address': 'Business address',
+            'city': 'City',
+            'state': 'State',
+            'pincode': 'Business PIN code',
+        }
+        widgets = {
+            'business_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'autocomplete': 'organization',
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-control',
+                'type': 'tel',
+                'autocomplete': 'tel',
+            }),
+            'address': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'autocomplete': 'street-address',
+            }),
+            'city': forms.TextInput(attrs={
+                'class': 'form-control',
+                'autocomplete': 'address-level2',
+            }),
+            'state': forms.TextInput(attrs={
+                'class': 'form-control',
+                'autocomplete': 'address-level1',
+            }),
+            'pincode': forms.TextInput(attrs={
+                'class': 'form-control',
+                'inputmode': 'numeric',
+                'maxlength': '6',
+                'autocomplete': 'postal-code',
+                'placeholder': 'Six-digit Indian PIN code',
+            }),
+        }
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        seller_roles = {
+            User.Role.INDUSTRY,
+            User.Role.WHOLESALER,
+            User.Role.SHOPKEEPER,
+        }
+        self.fields['business_name'].required = bool(
+            seller_roles.intersection(user.get_available_roles())
+        )
+        self.fields['pincode'].help_text = (
+            'Used for approximate supplier distance and nearby discovery.'
+        )
+
+
 class AddAccountRoleForm(forms.Form):
     role = forms.ChoiceField(
         choices=User.Role.choices,

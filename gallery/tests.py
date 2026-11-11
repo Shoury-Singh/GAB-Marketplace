@@ -13,9 +13,11 @@ from gallery.models import (
     Order,
     OrderMessage,
     Product,
+    ProductInteraction,
     QuoteRequest,
     SellerBanner,
 )
+from gallery.recommendations import hash_search_query
 
 
 User = get_user_model()
@@ -706,3 +708,166 @@ class SupplyChainMarketplaceTests(TestCase):
 
         self.assertContains(response, 'Wholesale fabric')
         self.assertContains(response, 'Shop fabric')
+
+
+class ProductDiscoveryTests(TestCase):
+    def setUp(self):
+        self.buyer = User.objects.create_user(
+            username='discovery-buyer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        self.seller = User.objects.create_user(
+            username='discovery-shop',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            business_name='Discovery Shop',
+        )
+        self.fabric = Product.objects.create(
+            owner=self.seller,
+            name='Preferred cotton',
+            category=Product.Category.FABRICS,
+            price='260.00',
+            minimum_order=5,
+            inventory=30,
+        )
+        self.other_category = Product.objects.create(
+            owner=self.seller,
+            name='Packaging rolls',
+            category=Product.Category.PACKAGING,
+            price='20.00',
+            minimum_order=1,
+            inventory=100,
+        )
+
+    def test_default_catalog_ranks_past_order_category_and_explains_it(self):
+        Order.objects.create(
+            product=self.fabric,
+            buyer=self.buyer,
+            seller=self.seller,
+            quantity=8,
+            status=Order.Status.DELIVERED,
+        )
+        self.client.force_login(self.buyer)
+
+        response = self.client.get(reverse('catalog'))
+
+        products = list(response.context['products'])
+        self.assertEqual(products[0], self.fabric)
+        self.assertIn(
+            'Matches categories you have explored or sourced',
+            products[0].recommendation_reasons,
+        )
+        self.assertIn('Fits your usual price range', products[0].recommendation_reasons)
+        self.assertIn(
+            'Available in your usual quantity range',
+            products[0].recommendation_reasons,
+        )
+
+    def test_new_buyer_fallback_uses_popularity_and_stock(self):
+        other_buyer = User.objects.create_user(
+            username='another-buyer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        Order.objects.create(
+            product=self.other_category,
+            buyer=other_buyer,
+            seller=self.seller,
+            quantity=4,
+            status=Order.Status.ACCEPTED,
+        )
+
+        self.client.force_login(self.buyer)
+        response = self.client.get(reverse('catalog'))
+
+        products = list(response.context['products'])
+        self.assertEqual(products[0], self.other_category)
+        self.assertIn('Receiving orders or enquiries on GAB', products[0].recommendation_reasons)
+        self.assertIn('Available now', products[0].recommendation_reasons)
+
+    def test_recommendations_explain_nearby_suppliers(self):
+        self.buyer.pincode = '395001'
+        self.buyer.save(update_fields=['pincode'])
+        self.seller.pincode = '395002'
+        self.seller.save(update_fields=['pincode'])
+        distant_seller = User.objects.create_user(
+            username='distant-shop',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            pincode='400001',
+        )
+        distant_product = Product.objects.create(
+            owner=distant_seller,
+            name='Distant fabric',
+            category=Product.Category.FABRICS,
+            inventory=30,
+            minimum_order=5,
+        )
+        for pincode, latitude, longitude in [
+            ('395001', '21.170200', '72.831100'),
+            ('395002', '21.180000', '72.840000'),
+            ('400001', '23.000000', '72.600000'),
+        ]:
+            PincodeLocation.objects.create(
+                pincode=pincode,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        self.client.force_login(self.buyer)
+
+        products = list(self.client.get(reverse('catalog')).context['products'])
+        recommended_fabric = next(
+            product for product in products if product.pk == self.fabric.pk
+        )
+
+        self.assertLess(products.index(self.fabric), products.index(distant_product))
+        self.assertIn(
+            'Supplier is in a nearby PIN-code area',
+            recommended_fabric.recommendation_reasons,
+        )
+
+    def test_authenticated_search_and_recommendation_click_store_minimized_events(self):
+        self.client.force_login(self.buyer)
+
+        self.client.get(reverse('catalog'), {'q': '  cotton private phrase  '})
+        self.client.get(
+            reverse('product_detail', args=[self.fabric.slug]),
+            {'source': 'recommendation'},
+        )
+
+        search_event = ProductInteraction.objects.get(
+            event_type=ProductInteraction.EventType.SEARCH,
+        )
+        self.assertEqual(search_event.user, self.buyer)
+        self.assertEqual(
+            search_event.search_hash,
+            hash_search_query('  cotton private phrase  '),
+        )
+        self.assertNotIn('private phrase', search_event.search_hash)
+        self.assertEqual(
+            set(ProductInteraction.objects.exclude(
+                event_type=ProductInteraction.EventType.SEARCH,
+            ).values_list('event_type', flat=True)),
+            {
+                ProductInteraction.EventType.CLICK,
+                ProductInteraction.EventType.PRODUCT_VIEW,
+            },
+        )
+
+    def test_successful_quote_request_is_recorded_as_interest(self):
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(
+            reverse('request_quote', args=[self.fabric.slug]),
+            {'quantity': '8', 'message': ''},
+        )
+
+        self.assertRedirects(response, reverse('buyer_quotes'))
+        self.assertTrue(
+            ProductInteraction.objects.filter(
+                user=self.buyer,
+                product=self.fabric,
+                event_type=ProductInteraction.EventType.QUOTE_REQUEST,
+            ).exists()
+        )

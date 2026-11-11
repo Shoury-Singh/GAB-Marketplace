@@ -126,6 +126,42 @@ class Product(models.Model):
         return int(((self.old_price - self.price) / self.old_price) * 100)
 
 
+class ProductInteraction(models.Model):
+    class EventType(models.TextChoices):
+        PRODUCT_VIEW = 'PRODUCT_VIEW', _('Product view')
+        SEARCH = 'SEARCH', _('Search')
+        CLICK = 'CLICK', _('Recommendation click')
+        QUOTE_REQUEST = 'QUOTE_REQUEST', _('Quote request')
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='product_interactions',
+        null=True,
+        blank=True,
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        related_name='interactions',
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    category = models.CharField(max_length=30, blank=True)
+    search_hash = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'event_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_event_type_display()} for {self.product or self.category}'
+
+
 class QuoteRequest(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending')

@@ -7,7 +7,9 @@
     <div class="card auth-card">
         <div class="auth-header">
             <h2 class="mb-1">Request a quote</h2>
-            <p class="mb-0 opacity-75">{{ product.name }} from {{ product.supplier }}</p>
+            <p class="mb-0 opacity-75">
+                {{ product.name }} from {{ product.owner.business_name|default:product.supplier }}
+            </p>
         </div>
         <div class="card-body p-4 p-lg-5">
             <p class="text-muted">The seller will respond to your request in GAB.</p>

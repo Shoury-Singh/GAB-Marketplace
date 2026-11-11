@@ -311,6 +311,98 @@ class AccountRoleManagementTests(TestCase):
         )
 
 
+class SellerBusinessProfileTests(TestCase):
+    def setUp(self):
+        self.seller = User.objects.create_user(
+            username='profile-shop',
+            password='test-password-123',
+            role=User.Role.SHOPKEEPER,
+            business_name='Old Shop Name',
+            city='Old City',
+            state='Old State',
+            pincode='395001',
+        )
+        self.buyer = User.objects.create_user(
+            username='profile-buyer',
+            password='test-password-123',
+            role=User.Role.BUYER,
+        )
+        self.product = Product.objects.create(
+            owner=self.seller,
+            name='Profile cotton',
+            supplier='Old Shop Name',
+            location='Old City, Old State',
+            inventory=10,
+        )
+
+    def test_seller_can_update_business_profile_and_public_listing(self):
+        self.client.force_login(self.seller)
+
+        response = self.client.post(reverse('account_settings'), {
+            'action': 'update-business-profile',
+            'business_name': 'New Supplier Shop',
+            'phone': '9876543210',
+            'address': '12 Market Road',
+            'city': 'New City',
+            'state': 'Gujarat',
+            'pincode': '395007',
+        })
+
+        self.assertRedirects(response, reverse('account_settings'))
+        self.seller.refresh_from_db()
+        self.assertEqual(self.seller.business_name, 'New Supplier Shop')
+        self.assertEqual(self.seller.phone, '9876543210')
+        self.assertEqual(self.seller.address, '12 Market Road')
+        self.assertEqual(self.seller.city, 'New City')
+        self.assertEqual(self.seller.state, 'Gujarat')
+        self.assertEqual(self.seller.pincode, '395007')
+
+        self.client.force_login(self.buyer)
+        catalog_response = self.client.get(
+            reverse('catalog'),
+            {'q': 'New Supplier Shop'},
+        )
+        self.assertContains(catalog_response, self.product.name)
+        self.assertContains(catalog_response, 'New Supplier Shop')
+        self.assertContains(
+            self.client.get(reverse('product_detail', args=[self.product.slug])),
+            'New City',
+        )
+        self.assertContains(
+            self.client.get(reverse('request_quote', args=[self.product.slug])),
+            'New Supplier Shop',
+        )
+
+    def test_invalid_pin_preserves_profile_and_buyers_cannot_edit_seller_profile(self):
+        self.client.force_login(self.seller)
+        response = self.client.post(reverse('account_settings'), {
+            'action': 'update-business-profile',
+            'business_name': 'Should Not Save',
+            'phone': '9876543210',
+            'address': 'New address',
+            'city': 'New City',
+            'state': 'Gujarat',
+            'pincode': '1234',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'valid six-digit Indian PIN code')
+        self.seller.refresh_from_db()
+        self.assertEqual(self.seller.business_name, 'Old Shop Name')
+        self.assertEqual(self.seller.pincode, '395001')
+
+        self.client.force_login(self.buyer)
+        response = self.client.post(reverse('account_settings'), {
+            'action': 'update-business-profile',
+            'business_name': 'Unauthorized Edit',
+            'pincode': '395007',
+        })
+
+        self.assertRedirects(response, reverse('account_settings'))
+        self.seller.refresh_from_db()
+        self.assertEqual(self.seller.business_name, 'Old Shop Name')
+
+
 class PincodeAccountTests(TestCase):
     def test_registration_accepts_valid_indian_pincode_and_rejects_invalid_values(self):
         registration_data = {

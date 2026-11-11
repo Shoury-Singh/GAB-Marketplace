@@ -188,7 +188,16 @@
                         <div class="detail-meta">No reviews yet</div>
                     {% endif %}
                     <div class="detail-meta">
-                        {{ product.supplier }} · {{ product.location }}
+                        {% if product.owner %}
+                            {{ product.owner.business_name|default:product.owner.username }} ·
+                            {% if product.owner.city or product.owner.state %}
+                                {{ product.owner.city }}{% if product.owner.city and product.owner.state %}, {% endif %}{{ product.owner.state }}
+                            {% else %}
+                                {{ product.location }}
+                            {% endif %}
+                        {% else %}
+                            {{ product.supplier }} · {{ product.location }}
+                        {% endif %}
                         {% if product.owner %} · {{ product.seller_role|title }}{% endif %}
                         {% if product.seller_role == 'SHOPKEEPER' and product.owner %}
                             · <a href="{% url 'shop_detail' product.owner.pk %}">Visit shop</a>
@@ -252,7 +261,7 @@
         <a href="{% url 'product_detail' item.slug %}" class="mini-card">
             <div class="mini-thumb" style="background: linear-gradient(135deg, {{ item.accent }}, rgba(15,23,42,0.7));"></div>
             <div class="fw-bold mb-1">{{ item.name }}</div>
-            <div class="text-muted small mb-2">{{ item.supplier }}</div>
+            <div class="text-muted small mb-2">{{ item.owner.business_name|default:item.supplier }}</div>
             <div class="fw-bold text-primary">₹{{ item.price }}</div>
         </a>
         {% endfor %}

@@ -1,5 +1,4 @@
 import mimetypes
-from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -20,9 +19,11 @@ from .models import (
     Order,
     OrderMessage,
     Product,
+    ProductInteraction,
     QuoteRequest,
     SellerBanner,
 )
+from .recommendations import distance_km, hash_search_query, rank_products
 from .forms import (
     GalleryImageForm,
     OrderCreateForm,
@@ -52,18 +53,16 @@ SELLER_BUYER_ROLES = {
 }
 
 
-def _distance_km(origin, destination):
-    latitude_delta = radians(float(destination.latitude) - float(origin.latitude))
-    longitude_delta = radians(float(destination.longitude) - float(origin.longitude))
-    origin_latitude = radians(float(origin.latitude))
-    destination_latitude = radians(float(destination.latitude))
-    haversine = (
-        sin(latitude_delta / 2) ** 2
-        + cos(origin_latitude)
-        * cos(destination_latitude)
-        * sin(longitude_delta / 2) ** 2
+def _record_interaction(request, event_type, product=None, category='', search_hash=''):
+    if not request.user.is_authenticated:
+        return
+    ProductInteraction.objects.create(
+        user=request.user,
+        product=product,
+        event_type=event_type,
+        category=category,
+        search_hash=search_hash,
     )
-    return 6371 * 2 * atan2(sqrt(haversine), sqrt(1 - haversine))
 
 
 def serve_uploaded_media(request, media_path):
@@ -118,6 +117,13 @@ def catalog_view(request):
     category = request.GET.get('category', 'all')
     query = request.GET.get('q', '').strip()
     sort = request.GET.get('sort', 'featured')
+    if query:
+        _record_interaction(
+            request,
+            ProductInteraction.EventType.SEARCH,
+            category=category if category != 'all' else '',
+            search_hash=hash_search_query(query[:200]),
+        )
 
     buyer_role = getattr(request.user, 'role', User.Role.BUYER)
     seller_role = BUYER_SELLER_ROLES.get(buyer_role)
@@ -163,6 +169,9 @@ def catalog_view(request):
             | Q(description__icontains=query)
             | Q(supplier__icontains=query)
             | Q(location__icontains=query)
+            | Q(owner__business_name__icontains=query)
+            | Q(owner__city__icontains=query)
+            | Q(owner__state__icontains=query)
         )
 
     if sort == 'nearest' and buyer_location is not None:
@@ -184,7 +193,7 @@ def catalog_view(request):
             if seller_location is None:
                 continue
             product.distance_km = round(
-                _distance_km(buyer_location, seller_location),
+                distance_km(buyer_location, seller_location),
                 1,
             )
             located_products.append(product)
@@ -205,7 +214,7 @@ def catalog_view(request):
     elif sort == 'rating':
         products = products.order_by('-rating', '-review_count')
     else:
-        products = products.order_by('-is_featured', '-created_at')
+        products = rank_products(products, request.user)
 
     category_counts = {}
     if seller_role:
@@ -294,6 +303,20 @@ def product_detail(request, slug):
         or product.seller_role != allowed_seller_role
     ):
         raise Http404
+    if request.user.is_authenticated and product.owner_id != request.user.pk:
+        if request.GET.get('source') == 'recommendation':
+            _record_interaction(
+                request,
+                ProductInteraction.EventType.CLICK,
+                product=product,
+                category=product.category,
+            )
+        _record_interaction(
+            request,
+            ProductInteraction.EventType.PRODUCT_VIEW,
+            product=product,
+            category=product.category,
+        )
     expected_buyer_role = SELLER_BUYER_ROLES.get(product.seller_role)
     can_contact_seller = (
         product.seller_role == allowed_seller_role
@@ -480,6 +503,12 @@ def request_quote(request, slug):
                 quote.buyer = request.user
                 quote.seller = product.owner
                 quote.save()
+                _record_interaction(
+                    request,
+                    ProductInteraction.EventType.QUOTE_REQUEST,
+                    product=product,
+                    category=product.category,
+                )
                 messages.success(request, 'Your quote request was sent to the seller.')
                 return redirect('buyer_quotes')
     else:

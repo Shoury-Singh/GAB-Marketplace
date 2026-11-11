@@ -22,6 +22,7 @@ from .forms import (
     AddAccountRoleForm,
     PasswordResetRequestForm,
     PasswordResetVerifyForm,
+    SellerBusinessProfileForm,
     SwitchAccountRoleForm,
     UserRegistrationForm,
     UserLoginForm,
@@ -292,13 +293,38 @@ def profile_view(request):
 
 @login_required
 def account_settings_view(request):
+    available_roles = request.user.get_available_roles()
+    seller_roles = {
+        User.Role.INDUSTRY,
+        User.Role.WHOLESALER,
+        User.Role.SHOPKEEPER,
+    }
+    has_seller_role = bool(seller_roles.intersection(available_roles))
     add_role_form = AddAccountRoleForm(user=request.user)
     switch_role_form = SwitchAccountRoleForm(user=request.user)
     location_form = AccountLocationForm(instance=request.user)
+    business_profile_form = (
+        SellerBusinessProfileForm(user=request.user, instance=request.user)
+        if has_seller_role
+        else None
+    )
 
     if request.method == 'POST':
         action = request.POST.get('action')
-        if action == 'update-location':
+        if action == 'update-business-profile':
+            if not has_seller_role:
+                messages.error(request, 'Business profile editing is only available to seller accounts.')
+                return redirect('account_settings')
+            business_profile_form = SellerBusinessProfileForm(
+                request.POST,
+                user=request.user,
+                instance=request.user,
+            )
+            if business_profile_form.is_valid():
+                business_profile_form.save()
+                messages.success(request, 'Your business profile was updated.')
+                return redirect('account_settings')
+        elif action == 'update-location':
             location_form = AccountLocationForm(request.POST, instance=request.user)
             if location_form.is_valid():
                 location_form.save()
@@ -337,12 +363,13 @@ def account_settings_view(request):
         else:
             messages.error(request, 'Choose a valid account settings action.')
 
-    available_roles = request.user.get_available_roles()
     role_labels = dict(User.Role.choices)
     return render(request, 'accounts/account_settings.html', {
         'add_role_form': add_role_form,
         'switch_role_form': switch_role_form,
         'location_form': location_form,
+        'business_profile_form': business_profile_form,
+        'has_seller_role': has_seller_role,
         'available_roles': [
             (role, role_labels[role])
             for role in available_roles

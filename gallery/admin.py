@@ -1,5 +1,22 @@
 from django.contrib import admin
-from .models import GalleryImage, Order, OrderMessage, Product, QuoteRequest, SellerBanner
+from .models import (
+    GalleryImage,
+    Order,
+    OrderMessage,
+    Product,
+    ProductInteraction,
+    QuoteRequest,
+    SellerBanner,
+)
+
+
+@admin.register(ProductInteraction)
+class ProductInteractionAdmin(admin.ModelAdmin):
+    list_display = ('event_type', 'user', 'product', 'category', 'created_at')
+    list_filter = ('event_type', 'category', 'created_at')
+    search_fields = ('user__username', 'product__name', 'search_hash')
+    readonly_fields = ('user', 'product', 'event_type', 'category', 'search_hash', 'created_at')
+    ordering = ('-created_at',)
 
 
 @admin.register(GalleryImage)

@@ -363,9 +363,19 @@
             <div class="alert alert-info" role="status">{{ location_message }}</div>
             {% endif %}
 
+            {% if sort == 'featured' %}
+            <p class="small text-muted mb-3">
+                {% if user.is_authenticated %}
+                GAB Intelligence ranks products using your recent views, supplier enquiries, completed orders, marketplace demand, stock, and mapped PIN-code area. Search phrases are stored only as keyed hashes.
+                {% else %}
+                Sign in to personalize product suggestions from your activity. Current rankings use marketplace demand, listing quality, and available stock.
+                {% endif %}
+            </p>
+            {% endif %}
+
             <div class="product-grid">
                 {% for product in products %}
-                <a href="{% url 'product_detail' product.slug %}" class="product-card text-decoration-none">
+                <a href="{% url 'product_detail' product.slug %}{% if sort == 'featured' %}?source=recommendation{% endif %}" class="product-card text-decoration-none">
                     <div class="product-media" style="background: linear-gradient(135deg, {{ product.accent }}, rgba(15,23,42,0.7));">
                         {% if product.image %}
                             <img class="product-photo" src="{{ product.image.url }}" alt="{{ product.name }}">
@@ -383,19 +393,27 @@
                         {% else %}
                             <div class="product-meta">No reviews yet</div>
                         {% endif %}
-                        <div class="product-meta">{{ product.supplier }} · {{ product.location }}</div>
                         {% if product.owner %}
-                            <div class="small text-success mb-2">
-                                {% if product.seller_role == 'SHOPKEEPER' %}
-                                Store:
+                            <div class="product-meta">
+                                {{ product.owner.business_name|default:product.owner.username }} ·
+                                {% if product.owner.city or product.owner.state %}
+                                    {{ product.owner.city }}{% if product.owner.city and product.owner.state %}, {% endif %}{{ product.owner.state }}
                                 {% else %}
-                                Listed by
+                                    {{ product.location }}
                                 {% endif %}
-                                {{ product.owner.business_name|default:product.owner.username }}
                             </div>
+                        {% else %}
+                            <div class="product-meta">{{ product.supplier }} · {{ product.location }}</div>
                         {% endif %}
                         {% if product.distance_km != None %}
                             <div class="small text-primary mb-2">About {{ product.distance_km }} km away</div>
+                        {% endif %}
+                        {% if product.recommendation_reasons %}
+                            <div class="small text-success mb-2">
+                                {% for reason in product.recommendation_reasons %}
+                                    <span class="d-block">{{ reason }}</span>
+                                {% endfor %}
+                            </div>
                         {% endif %}
 
                         <div class="price-row">

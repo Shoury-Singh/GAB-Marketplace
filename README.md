@@ -94,6 +94,22 @@ The catalog follows the trade hierarchy:
 
 This flow is built directly into the app navigation and product visibility logic.
 
+### Explainable product discovery
+
+The default catalog order uses a deterministic recommendation baseline within the
+existing next-supplier role boundary. It combines accepted, processing, shipped,
+or delivered orders and quantities, prior product interactions, price history,
+stock, approximate PIN-code distance, and marketplace order popularity. Suggestions
+include plain-language reasons and new users receive a popularity, availability,
+and location-based fallback. Explicit rating, price, and nearest sorting remain
+available.
+
+Authenticated product views, recommendation clicks, searches, and quote requests
+are recorded for future ranking evaluation. Search text is stored only as a
+one-way hash, and no IP address or device identifier is collected. This is a
+baseline rather than a trained ML model; seller demand forecasting is deferred
+until there is sufficient order history.
+
 ### Product, banner, and image management
 
 Sellers can manage both product listings and promotional content. This includes product publishing, image asset handling, and banner-based business promotion, giving brands a more complete storefront profile.
